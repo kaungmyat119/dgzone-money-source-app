@@ -95,8 +95,11 @@ class _DgzoneMoneyAppState extends State<DgzoneMoneyApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // `inactive` is also emitted for temporary system UI (biometric prompts,
+    // permissions and some route transitions). Covering the app for that state
+    // can leave the privacy screen visible even though the app never left.
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
       backgroundedAt ??= DateTime.now();
       if (mounted && !privacyCovered) {
@@ -110,16 +113,43 @@ class _DgzoneMoneyAppState extends State<DgzoneMoneyApp>
   }
 
   Future<void> _handleResume(DateTime? leftAt) async {
-    await widget.database.postDueRecurring();
-    await NotificationService.instance.syncRecurring(widget.database);
-    unawaited(CloudBackupService.instance.runAutomaticBackupIfDue(widget.database));
-    await _loadSecurity();
     if (!mounted) return;
     final shouldLock = lockEnabled &&
         leftAt != null &&
         DateTime.now().difference(leftAt).inMinutes >= autoLockMinutes;
+
+    // Restore the visible UI immediately. Optional maintenance must never keep
+    // the user trapped behind the privacy cover.
     setState(() {
       if (shouldLock) locked = true;
+      privacyCovered = false;
+    });
+
+    try {
+      await _loadSecurity().timeout(const Duration(seconds: 12));
+    } catch (_) {
+      // Existing in-memory security settings remain usable.
+    }
+    try {
+      await widget.database
+          .postDueRecurring()
+          .timeout(const Duration(seconds: 20));
+      await NotificationService.instance
+          .syncRecurring(widget.database)
+          .timeout(const Duration(seconds: 30));
+    } catch (_) {
+      // Recurring/notification maintenance is optional during resume.
+    }
+    unawaited(
+      CloudBackupService.instance.runAutomaticBackupIfDue(widget.database),
+    );
+  }
+
+  void _unlockApp() {
+    if (!mounted) return;
+    backgroundedAt = null;
+    setState(() {
+      locked = false;
       privacyCovered = false;
     });
   }
@@ -225,7 +255,7 @@ class _DgzoneMoneyAppState extends State<DgzoneMoneyApp>
               Positioned.fill(
                 child: AppLockScreen(
                   allowBiometric: biometricEnabled,
-                  onUnlocked: () => setState(() => locked = false),
+                  onUnlocked: _unlockApp,
                 ),
               ),
           ],

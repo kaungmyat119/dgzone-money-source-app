@@ -74,7 +74,7 @@ Myanmar-first personal finance application. Current source contains:
    generate the standard platform runner files.
 3. Run `flutter pub get`.
 4. Run `flutter run` for an attached Android device.
-5. Run `flutter build apk --release` to create a release APK.
+5. Run `flutter build apk --release --no-tree-shake-icons` to create a release APK. The flag is required because account/category icons are stored as code points and built at runtime.
 
 Device biometric authentication still needs its production platform
 integration.
