@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../data/local_database.dart';
 import '../models.dart';
@@ -260,14 +259,6 @@ class _AccountsScreenState extends State<AccountsScreen> {
       ),
     );
   }
-
-  IconData _iconFor(String type) => switch (type) {
-        'bank' => Icons.account_balance,
-        'wallet' => Icons.phone_android,
-        'credit' => Icons.credit_card,
-        'saving' => Icons.savings,
-        _ => Icons.account_balance_wallet,
-      };
 
   String _typeLabel(String type) => switch (type) {
         'bank' => 'ဘဏ်အကောင့်',

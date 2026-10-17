@@ -98,7 +98,7 @@ class _StartupAppState extends State<_StartupApp> {
             'dgzone-maintenance',
             backgroundMaintenanceTask,
             frequency: const Duration(hours: 6),
-            existingWorkPolicy: ExistingWorkPolicy.keep,
+            existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
           )
           .timeout(const Duration(seconds: 15));
     } catch (_) {
