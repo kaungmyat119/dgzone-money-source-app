@@ -531,7 +531,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _card([
             _action(Icons.help_outline, 'အကူအညီ', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpPrivacyScreen(page: InformationPage.help)))),
             _action(Icons.shield_outlined, 'ကိုယ်ရေးအချက်အလက် မူဝါဒ', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpPrivacyScreen(page: InformationPage.privacy)))),
-            _action(Icons.info_outline, 'App အကြောင်း', () => showAboutDialog(context: context, applicationName: 'DGzone Money', applicationVersion: '0.10.9')),
+            _action(Icons.info_outline, 'App အကြောင်း', () => showAboutDialog(context: context, applicationName: 'DGzone Money', applicationVersion: '0.10.10')),
           ]),
           const SizedBox(height: 12),
           Card(

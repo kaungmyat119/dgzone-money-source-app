@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/local_database.dart';
 import '../models.dart';
@@ -54,18 +57,28 @@ class _RecurringScreenState extends State<RecurringScreen> {
       ),
     );
     if (changed == true) {
-      await NotificationService.instance.syncRecurring(widget.database);
       await refresh();
       widget.onDataChanged();
+      // Refresh the visible list first. Notification scheduling is optional
+      // background work and must never delay newly saved data appearing.
+      unawaited(
+        NotificationService.instance
+            .syncRecurring(widget.database)
+            .catchError((_) {}),
+      );
     }
   }
 
   Future<void> postDue() async {
     final count = await widget.database.postDueRecurring();
-    await NotificationService.instance.syncRecurring(widget.database);
     if (!mounted) return;
     await refresh();
     widget.onDataChanged();
+    unawaited(
+      NotificationService.instance
+          .syncRecurring(widget.database)
+          .catchError((_) {}),
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: LText(
@@ -194,9 +207,13 @@ class _RecurringScreenState extends State<RecurringScreen> {
                     onTap: () => openForm(item),
                     onEnabledChanged: (value) async {
                       await widget.database.toggleRecurring(item.id, value);
-                      await NotificationService.instance.syncRecurring(widget.database);
                       await refresh();
                       widget.onDataChanged();
+                      unawaited(
+                        NotificationService.instance
+                            .syncRecurring(widget.database)
+                            .catchError((_) {}),
+                      );
                     },
                   ),
                   const SizedBox(height: 9),

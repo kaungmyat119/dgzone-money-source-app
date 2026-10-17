@@ -51,6 +51,8 @@ Myanmar-first personal finance application. Current source contains:
   the unnecessary transaction-type selector is shown only for scheduled rules
 - Recurring schedules support weekly, monthly, yearly and a custom number of
   days; custom schedules advance the next date by the chosen interval
+- Newly saved recurring and debt entries refresh on screen immediately;
+  notification rescheduling runs separately and cannot block the visible list
 - Dark mode uses high-contrast light text, dark cards and adaptive secondary
   text/surfaces throughout transaction, recurring, report and Settings screens
 - Google Drive app-private cloud sync, manual sync/restore, daily automatic
