@@ -150,7 +150,7 @@ class _BudgetSummary extends StatelessWidget {
                 : ratio > .8
                     ? AppColors.amber
                     : AppColors.emerald,
-            backgroundColor: Colors.white,
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
           ),
           const SizedBox(height: 10),
           Row(

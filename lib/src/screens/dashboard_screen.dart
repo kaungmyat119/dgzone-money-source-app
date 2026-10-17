@@ -65,6 +65,9 @@ class DashboardScreen extends StatelessWidget {
         ),
       ),
     );
+    // A child route may have added, edited, deleted or auto-posted entries.
+    // Refresh the dashboard immediately when returning from that route.
+    onDataChanged();
   }
 
   Future<void> _openBudgets(BuildContext context) async {
@@ -153,12 +156,14 @@ class DashboardScreen extends StatelessWidget {
               children: [
                 Image.asset('assets/images/dgzone_money_logo.png', height: 44),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                   child: LText(
                     'DGzone Money',
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
-                      color: AppColors.emeraldDark,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF8CF0BD)
+                          : AppColors.emeraldDark,
                     ),
                   ),
                 ),
@@ -167,15 +172,18 @@ class DashboardScreen extends StatelessWidget {
             actions: [
               IconButton(
                 tooltip: context.tr('ပုံမှန်စာရင်းနှင့် သတိပေးချက်'),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => RecurringScreen(
-                      database: database,
-                      onDataChanged: onDataChanged,
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => RecurringScreen(
+                        database: database,
+                        onDataChanged: onDataChanged,
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                  onDataChanged();
+                },
                 icon: const Icon(Icons.notifications_active_outlined),
               ),
               PopupMenuButton<AppLanguage>(
@@ -291,7 +299,15 @@ class DashboardScreen extends StatelessWidget {
                   ),
                 );
               } else if (index == 4) {
-                _openSettings(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RecurringScreen(
+                      database: database,
+                      onDataChanged: onDataChanged,
+                    ),
+                  ),
+                );
               }
             },
             destinations: [
@@ -317,8 +333,9 @@ class DashboardScreen extends StatelessWidget {
                 label: strings.get('reports'),
               ),
               NavigationDestination(
-                icon: const Icon(Icons.settings_outlined),
-                label: strings.get('settings'),
+                icon: const Icon(Icons.event_repeat_outlined),
+                selectedIcon: const Icon(Icons.event_repeat),
+                label: context.tr('ပုံမှန်စာရင်း'),
               ),
             ],
           ),
@@ -401,7 +418,7 @@ class _SummaryValue extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .82),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: .86),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Padding(

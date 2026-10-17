@@ -28,6 +28,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   Map<int, String> accountNames = const {};
   Map<String, MoneyCategory> categoryInfo = const {};
   bool loading = true;
+  int _reloadGeneration = 0;
 
   @override
   void initState() { super.initState(); reload(); }
@@ -35,6 +36,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   void dispose() { searchController.dispose(); super.dispose(); }
 
   Future<void> reload() async {
+    final generation = ++_reloadGeneration;
     final results = await Future.wait([
       widget.database.transactions(query: searchController.text),
       widget.database.transactions(query: searchController.text, type: filter),
@@ -42,7 +44,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
       widget.database.categories(TransactionType.expense),
       widget.database.categories(TransactionType.income),
     ]);
-    if (!mounted) return;
+    if (!mounted || generation != _reloadGeneration) return;
     setState(() {
       monthAll = (results[0] as List<MoneyTransaction>).where((item) =>
         item.occurredAt.year == month.year && item.occurredAt.month == month.month).toList();
@@ -71,7 +73,10 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     }
     if (!mounted) return;
     final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => TransactionFormScreen(database: widget.database, transaction: transaction)));
-    if (changed == true) { widget.onDataChanged(); reload(); }
+    if (changed == true) {
+      widget.onDataChanged();
+      await reload();
+    }
   }
 
   Future<void> remove(MoneyTransaction item) async {
@@ -79,7 +84,11 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
       title: const LText('စာရင်းဖျက်မည်လား?'), content: LText('“${item.title}” ကို ဖျက်ပါမည်။'),
       actions: [TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const LText('မဖျက်ပါ')), FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const LText('ဖျက်မည်'))],
     ));
-    if (okay == true) { await widget.database.deleteTransaction(item.id); widget.onDataChanged(); reload(); }
+    if (okay == true) {
+      await widget.database.deleteTransaction(item.id);
+      widget.onDataChanged();
+      await reload();
+    }
   }
 
   Map<DateTime, List<MoneyTransaction>> get groups {
@@ -128,7 +137,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
 
   Widget _summary(int income, int expense) => Container(
     margin: const EdgeInsets.fromLTRB(16, 4, 16, 12), padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFD9FFEA), Color(0xFFB9F6D3)]), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white, width: 2)),
+    decoration: BoxDecoration(gradient: LinearGradient(colors: Theme.of(context).brightness == Brightness.dark ? const [Color(0xFF173D30), Color(0xFF1F513E)] : const [Color(0xFFD9FFEA), Color(0xFFB9F6D3)]), borderRadius: BorderRadius.circular(24), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 2)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const LText('စုစုပေါင်းလက်ကျန်', style: TextStyle(fontWeight: FontWeight.w700)),
       LText(context.money(income - expense), style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900)), const SizedBox(height: 14),
@@ -136,7 +145,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     ]),
   );
 
-  Widget _summaryItem(IconData icon, String label, int amount, Color color) => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .9), borderRadius: BorderRadius.circular(18)), child: Row(children: [
+  Widget _summaryItem(IconData icon, String label, int amount, Color color) => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface.withValues(alpha: .9), borderRadius: BorderRadius.circular(18)), child: Row(children: [
     CircleAvatar(backgroundColor: color.withValues(alpha: .16), child: Icon(icon, color: color)), const SizedBox(width: 8),
     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [LText(label), LText(context.money(amount), style: TextStyle(fontWeight: FontWeight.w900, color: color))])),
   ]));
@@ -161,7 +170,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     final imagePath = item.receiptImagePath;
     return InkWell(onTap: () => openForm(item), onLongPress: () => remove(item), child: Padding(padding: const EdgeInsets.fromLTRB(14, 10, 8, 10), child: Row(children: [
       CircleAvatar(radius: 25, backgroundColor: iconColor.withValues(alpha: .14), child: Icon(icon, color: iconColor)), const SizedBox(width: 12),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [LText(item.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)), LText('${accountNames[item.accountId] ?? 'အကောင့်'} • ${item.category}', style: const TextStyle(color: Colors.black54)), LText(DateFormat('h:mm a').format(item.occurredAt), style: const TextStyle(fontSize: 12, color: Colors.black45))])),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [LText(item.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)), LText('${accountNames[item.accountId] ?? 'အကောင့်'} • ${item.category}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)), LText(DateFormat('h:mm a').format(item.occurredAt), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))])),
       LText('${positive ? '+' : '−'} ${context.money(item.amount)}', style: TextStyle(fontWeight: FontWeight.w900, color: color)),
       if (imagePath != null && File(imagePath).existsSync()) IconButton(onPressed: () => openReceiptImage(context, imagePath), icon: const Icon(Icons.receipt_long_outlined)), const Icon(Icons.chevron_right),
     ])));

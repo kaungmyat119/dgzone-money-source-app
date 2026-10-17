@@ -32,20 +32,31 @@ class _RecurringScreenState extends State<RecurringScreen> {
     future = widget.database.recurringTransactions();
   }
 
-  void refresh() => setState(() {
-        future = widget.database.recurringTransactions();
-      });
+  Future<void> refresh() async {
+    final next = widget.database.recurringTransactions();
+    if (mounted) setState(() => future = next);
+    await next;
+  }
 
   Future<void> openForm([RecurringTransaction? item]) async {
+    final initialKind = switch (selectedTab) {
+      1 => 'receivable',
+      2 => 'payable',
+      _ => 'scheduled',
+    };
     final changed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _RecurringForm(database: widget.database, item: item),
+      builder: (_) => _RecurringForm(
+        database: widget.database,
+        item: item,
+        initialKind: initialKind,
+      ),
     );
     if (changed == true) {
       await NotificationService.instance.syncRecurring(widget.database);
-      refresh();
+      await refresh();
       widget.onDataChanged();
     }
   }
@@ -54,7 +65,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
     final count = await widget.database.postDueRecurring();
     await NotificationService.instance.syncRecurring(widget.database);
     if (!mounted) return;
-    refresh();
+    await refresh();
     widget.onDataChanged();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -108,17 +119,26 @@ class _RecurringScreenState extends State<RecurringScreen> {
           }
           final active = items.where((item) => item.enabled).toList();
           final shown = items.where((item) => switch (selectedTab) {
-            1 => item.type == TransactionType.income,
-            2 => item.type == TransactionType.expense,
-            _ => true,
+            1 => item.kind == 'receivable',
+            2 => item.kind == 'payable',
+            _ => item.kind == 'scheduled',
           }).toList();
-          final monthlyIncome = active
+          final scheduled = active.where((item) => item.kind == 'scheduled');
+          final monthlyIncome = scheduled
               .where((item) => item.type == TransactionType.income)
               .fold<int>(0, (sum, item) => sum + _monthlyAmount(item));
-          final monthlyExpense = active
+          final monthlyExpense = scheduled
               .where((item) => item.type == TransactionType.expense)
               .fold<int>(0, (sum, item) => sum + _monthlyAmount(item));
-          final next = active.isEmpty ? null : active.first;
+          final receivableTotal = active
+              .where((item) => item.kind == 'receivable')
+              .fold<int>(0, (sum, item) => sum + item.amount);
+          final payableTotal = active
+              .where((item) => item.kind == 'payable')
+              .fold<int>(0, (sum, item) => sum + item.amount);
+          final datedScheduled = scheduled.where((item) => item.nextRun != null).toList()
+            ..sort((a, b) => a.nextRun!.compareTo(b.nextRun!));
+          final next = datedScheduled.firstOrNull;
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
             children: [
@@ -135,7 +155,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
               ),
               const SizedBox(height: 14),
               _RecurringSummaryCard(
-                activeCount: active.length,
+                activeCount: scheduled.length,
                 income: monthlyIncome,
                 expense: monthlyExpense,
                 next: next,
@@ -143,13 +163,17 @@ class _RecurringScreenState extends State<RecurringScreen> {
               const SizedBox(height: 18),
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: LText(
-                      'လာမည့်ငွေပေးချေမှုများ',
+                      switch (selectedTab) {
+                        1 => 'အကြွေးရရန်စာရင်း',
+                        2 => 'အကြွေးပေးရန်စာရင်း',
+                        _ => 'လာမည့်ပုံမှန်စာရင်းများ',
+                      },
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
                     ),
                   ),
-                  IconButton.filledTonal(
+                  if (selectedTab == 0) IconButton.filledTonal(
                     tooltip: context.tr('ရက်ရောက်စာရင်းသွင်းရန်'),
                     onPressed: postDue,
                     icon: const Icon(Icons.playlist_add_check),
@@ -172,7 +196,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
                     onEnabledChanged: (value) async {
                       await widget.database.toggleRecurring(item.id, value);
                       await NotificationService.instance.syncRecurring(widget.database);
-                      refresh();
+                      await refresh();
                       widget.onDataChanged();
                     },
                   ),
@@ -180,9 +204,8 @@ class _RecurringScreenState extends State<RecurringScreen> {
                 ],
               const SizedBox(height: 8),
               _RecurringTotalsCard(
-                income: monthlyIncome,
-                expense: monthlyExpense,
-                onPostDue: postDue,
+                income: receivableTotal,
+                expense: payableTotal,
               ),
             ],
           );
@@ -209,8 +232,10 @@ class _RecurringSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFE6FFF2), Color(0xFFC8F9E2)],
+          gradient: LinearGradient(
+            colors: Theme.of(context).brightness == Brightness.dark
+                ? const [Color(0xFF173D30), Color(0xFF1F513E)]
+                : const [Color(0xFFE6FFF2), Color(0xFFC8F9E2)],
           ),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white, width: 2),
@@ -227,10 +252,12 @@ class _RecurringSummaryCard extends StatelessWidget {
                 Expanded(
                   child: LText(
                     '$activeCount ခု',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 36,
                       fontWeight: FontWeight.w900,
-                      color: AppColors.emeraldDark,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF8CF0BD)
+                          : AppColors.emeraldDark,
                     ),
                   ),
                 ),
@@ -267,7 +294,7 @@ class _RecurringSummaryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .72),
+                  color: Theme.of(context).colorScheme.surface.withValues(alpha: .82),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(
@@ -302,7 +329,7 @@ class _SummaryAmount extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(11),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+        decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(16)),
         child: Row(children: [
           CircleAvatar(backgroundColor: color.withValues(alpha: .14), child: Icon(icon, color: color)),
           const SizedBox(width: 8),
@@ -357,8 +384,12 @@ class _RecurringPaymentCard extends StatelessWidget {
                     ]),
                     const SizedBox(height: 3),
                     LText(
-                      '${_frequencyLabel(item.frequency)} • ${context.appDate(item.nextRun)}',
-                      style: const TextStyle(color: Colors.black54, fontSize: 12),
+                      item.kind == 'scheduled'
+                          ? '${_frequencyDescription(item)} • ${context.appDate(item.nextRun!)}'
+                          : item.nextRun == null
+                              ? 'ရက်သတ်မှတ်မထားပါ'
+                              : 'ပေး/ရမည့်ရက် • ${context.appDate(item.nextRun!)}',
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                     ),
                     const SizedBox(height: 7),
                     Row(children: [
@@ -378,26 +409,27 @@ class _RecurringPaymentCard extends StatelessWidget {
                       Icon(Icons.account_balance_wallet_outlined, size: 17, color: color),
                       const SizedBox(width: 4),
                       Flexible(child: LText(item.accountName, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, color: Colors.black54))),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))),
                       const SizedBox(width: 8),
                       Icon(item.dueSoon ? Icons.notifications_active : Icons.notifications_none,
-                        size: 20, color: item.dueSoon ? AppColors.coral : Colors.black45),
+                        size: 20, color: item.dueSoon ? AppColors.coral : Theme.of(context).colorScheme.onSurfaceVariant),
                     ]),
                     const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: _cycleProgress(item),
-                      minHeight: 6,
-                      borderRadius: BorderRadius.circular(8),
-                      color: color,
-                      backgroundColor: color.withValues(alpha: .12),
-                    ),
+                    if (item.nextRun != null)
+                      LinearProgressIndicator(
+                        value: _cycleProgress(item),
+                        minHeight: 6,
+                        borderRadius: BorderRadius.circular(8),
+                        color: color,
+                        backgroundColor: color.withValues(alpha: .12),
+                      ),
                   ],
                 ),
               ),
               const SizedBox(width: 6),
               Column(children: [
                 Switch(value: item.enabled, onChanged: onEnabledChanged),
-                const Icon(Icons.chevron_right, color: Colors.black45),
+                Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ]),
             ],
           ),
@@ -408,10 +440,9 @@ class _RecurringPaymentCard extends StatelessWidget {
 }
 
 class _RecurringTotalsCard extends StatelessWidget {
-  const _RecurringTotalsCard({required this.income, required this.expense, required this.onPostDue});
+  const _RecurringTotalsCard({required this.income, required this.expense});
   final int income;
   final int expense;
-  final VoidCallback onPostDue;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -426,12 +457,6 @@ class _RecurringTotalsCard extends StatelessWidget {
               const VerticalDivider(),
               Expanded(child: _total(context, Icons.handshake, 'ပေးရန်', expense, AppColors.coral)),
             ]),
-            const SizedBox(height: 12),
-            SizedBox(width: double.infinity, child: OutlinedButton.icon(
-              onPressed: onPostDue,
-              icon: const Icon(Icons.fact_check_outlined),
-              label: const LText('ရက်ရောက်စာရင်းများ ယခုသွင်းမည်'),
-            )),
           ]),
         ),
       );
@@ -468,26 +493,38 @@ class _EmptyRecurring extends StatelessWidget {
 int _monthlyAmount(RecurringTransaction item) => switch (item.frequency) {
   'weekly' => item.amount * 52 ~/ 12,
   'yearly' => item.amount ~/ 12,
+  'custom' => item.amount * 30 ~/ (item.intervalDays ?? 1),
   _ => item.amount,
 };
 
 double _cycleProgress(RecurringTransaction item) {
-  final cycleDays = switch (item.frequency) {'weekly' => 7, 'yearly' => 365, _ => 30};
+  final cycleDays = switch (item.frequency) {
+    'weekly' => 7,
+    'yearly' => 365,
+    'custom' => item.intervalDays ?? 1,
+    _ => 30,
+  };
   final remaining = item.daysUntilDue.clamp(0, cycleDays);
   return (1 - remaining / cycleDays).clamp(0.0, 1.0).toDouble();
 }
 
 String _dueLabel(RecurringTransaction item) {
   if (!item.enabled) return 'ပိတ်ထားသည်';
+  if (item.nextRun == null) return 'ရက်သတ်မှတ်မထားပါ';
   if (item.daysUntilDue < 0) return '${item.daysUntilDue.abs()} ရက်ကျော်';
   if (item.daysUntilDue == 0) return 'ယနေ့';
   return '${item.daysUntilDue} ရက်လို';
 }
 
 class _RecurringForm extends StatefulWidget {
-  const _RecurringForm({required this.database, this.item});
+  const _RecurringForm({
+    required this.database,
+    required this.initialKind,
+    this.item,
+  });
   final LocalDatabase database;
   final RecurringTransaction? item;
+  final String initialKind;
 
   @override
   State<_RecurringForm> createState() => _RecurringFormState();
@@ -497,10 +534,12 @@ class _RecurringFormState extends State<_RecurringForm> {
   final formKey = GlobalKey<FormState>();
   late final TextEditingController titleController;
   late final TextEditingController amountController;
+  late final TextEditingController intervalDaysController;
   late TransactionType type;
+  late String kind;
   late String category;
   late String frequency;
-  late DateTime nextRun;
+  DateTime? nextRun;
   late int reminderDays;
   late bool enabled;
   int? accountId;
@@ -523,16 +562,24 @@ class _RecurringFormState extends State<_RecurringForm> {
   void initState() {
     super.initState();
     final item = widget.item;
-    type = item?.type ?? TransactionType.expense;
+    kind = item?.kind ?? widget.initialKind;
+    type = item?.type ??
+        (kind == 'receivable'
+            ? TransactionType.income
+            : TransactionType.expense);
     category = item?.category ?? categories.first;
     frequency = item?.frequency ?? 'monthly';
-    nextRun = item?.nextRun ?? DateTime.now().add(const Duration(days: 1));
+    nextRun = item?.nextRun ??
+        (kind == 'scheduled' ? DateTime.now().add(const Duration(days: 1)) : null);
     reminderDays = item?.reminderDays ?? 1;
     enabled = item?.enabled ?? true;
     accountId = item?.accountId;
     titleController = TextEditingController(text: item?.title ?? '');
     amountController = TextEditingController(
       text: item?.amount.toString() ?? '',
+    );
+    intervalDaysController = TextEditingController(
+      text: item?.intervalDays?.toString() ?? '1',
     );
     _loadCategories();
   }
@@ -554,11 +601,13 @@ class _RecurringFormState extends State<_RecurringForm> {
   void dispose() {
     titleController.dispose();
     amountController.dispose();
+    intervalDaysController.dispose();
     super.dispose();
   }
 
   Future<void> save() async {
     if (!formKey.currentState!.validate() || accountId == null) return;
+    if (kind == 'scheduled' && nextRun == null) return;
     setState(() => saving = true);
     await widget.database.saveRecurring(
       id: widget.item?.id,
@@ -567,7 +616,11 @@ class _RecurringFormState extends State<_RecurringForm> {
       accountId: accountId!,
       type: type,
       amount: int.parse(amountController.text.replaceAll(',', '')),
-      frequency: frequency,
+      kind: kind,
+      frequency: kind == 'scheduled' ? frequency : null,
+      intervalDays: kind == 'scheduled' && frequency == 'custom'
+          ? int.parse(intervalDaysController.text)
+          : null,
       nextRun: nextRun,
       enabled: enabled,
       reminderDays: reminderDays,
@@ -607,7 +660,28 @@ class _RecurringFormState extends State<_RecurringForm> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                SegmentedButton<TransactionType>(
+                SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: 'scheduled', label: LText('ပုံမှန်စာရင်း')),
+                    ButtonSegment(value: 'receivable', label: LText('အကြွေးရရန်')),
+                    ButtonSegment(value: 'payable', label: LText('အကြွေးပေးရန်')),
+                  ],
+                  selected: {kind},
+                  onSelectionChanged: (value) => setState(() {
+                    kind = value.first;
+                    if (kind == 'receivable') type = TransactionType.income;
+                    if (kind == 'payable') type = TransactionType.expense;
+                    category = categories.first;
+                    if (kind == 'scheduled' && nextRun == null) {
+                      nextRun = DateTime.now().add(const Duration(days: 1));
+                    } else if (kind != 'scheduled') {
+                      nextRun = null;
+                    }
+                  }),
+                ),
+                const SizedBox(height: 14),
+                if (kind == 'scheduled') SegmentedButton<TransactionType>(
                   segments: const [
                     ButtonSegment(
                       value: TransactionType.income,
@@ -626,7 +700,7 @@ class _RecurringFormState extends State<_RecurringForm> {
                     category = categories.first;
                   }),
                 ),
-                const SizedBox(height: 14),
+                if (kind == 'scheduled') const SizedBox(height: 14),
                 TextFormField(
                   controller: titleController,
                   decoration: InputDecoration(
@@ -692,7 +766,7 @@ class _RecurringFormState extends State<_RecurringForm> {
                   onChanged: (value) => setState(() => accountId = value),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
+                if (kind == 'scheduled') DropdownButtonFormField<String>(
                   value: frequency,
                   decoration: InputDecoration(
                     labelText: context.tr('ထပ်လုပ်မည့်ကာလ'),
@@ -702,10 +776,30 @@ class _RecurringFormState extends State<_RecurringForm> {
                     DropdownMenuItem(value: 'weekly', child: LText('အပတ်စဉ်')),
                     DropdownMenuItem(value: 'monthly', child: LText('လစဉ်')),
                     DropdownMenuItem(value: 'yearly', child: LText('နှစ်စဉ်')),
+                    DropdownMenuItem(value: 'custom', child: LText('ရက်အလိုက် စိတ်ကြိုက်')),
                   ],
                   onChanged: (value) => setState(() => frequency = value!),
                 ),
-                const SizedBox(height: 12),
+                if (kind == 'scheduled' && frequency == 'custom') ...[
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: intervalDaysController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: context.tr('ဘယ်နှစ်ရက်တစ်ခါ'),
+                      suffixText: context.tr('ရက်'),
+                      prefixIcon: const Icon(Icons.date_range_outlined),
+                    ),
+                    validator: (value) {
+                      if (kind != 'scheduled' || frequency != 'custom') return null;
+                      final days = int.tryParse(value ?? '');
+                      return days == null || days < 1
+                          ? 'ရက်အရေအတွက် အနည်းဆုံး ၁ ရက်ထည့်ပါ'
+                          : null;
+                    },
+                  ),
+                ],
+                if (kind == 'scheduled') const SizedBox(height: 12),
                 ListTile(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -714,20 +808,32 @@ class _RecurringFormState extends State<_RecurringForm> {
                     ),
                   ),
                   leading: const Icon(Icons.event),
-                  title: const LText('နောက်တစ်ကြိမ် စာရင်းသွင်းမည့်ရက်'),
-                  subtitle: LText(context.appDate(nextRun)),
+                  title: LText(kind == 'scheduled'
+                      ? 'နောက်တစ်ကြိမ် စာရင်းသွင်းမည့်ရက်'
+                      : 'ပေး/ရမည့်ရက် (မဖြစ်မနေ မလိုပါ)'),
+                  subtitle: LText(nextRun == null
+                      ? 'ရက်သတ်မှတ်မထားပါ'
+                      : context.appDate(nextRun!)),
+                  trailing: kind != 'scheduled' && nextRun != null
+                      ? IconButton(
+                          tooltip: context.tr('ရက်စွဲဖယ်မည်'),
+                          onPressed: () => setState(() => nextRun = null),
+                          icon: const Icon(Icons.close),
+                        )
+                      : null,
                   onTap: () async {
+                    final initial = nextRun ?? DateTime.now();
                     final date = await showDatePicker(
                       context: context,
-                      initialDate: nextRun,
+                      initialDate: initial,
                       firstDate: DateTime(2020),
                       lastDate: DateTime(2100),
                     );
                     if (date != null) setState(() => nextRun = date);
                   },
                 ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int>(
+                if (nextRun != null) const SizedBox(height: 12),
+                if (nextRun != null) DropdownButtonFormField<int>(
                   value: reminderDays,
                   decoration: InputDecoration(
                     labelText: context.tr('သတိပေးမည့်ရက်'),
@@ -770,8 +876,14 @@ class _RecurringFormState extends State<_RecurringForm> {
   }
 }
 
-String _frequencyLabel(String value) => switch (value) {
+String _frequencyLabel(String? value) => switch (value) {
       'weekly' => 'အပတ်စဉ်',
       'yearly' => 'နှစ်စဉ်',
+      'custom' => 'ရက်အလိုက်',
       _ => 'လစဉ်',
     };
+
+String _frequencyDescription(RecurringTransaction item) =>
+    item.frequency == 'custom'
+        ? '${item.intervalDays ?? 1} ရက်တစ်ခါ'
+        : _frequencyLabel(item.frequency);

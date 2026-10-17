@@ -124,7 +124,7 @@ class _Summary extends StatelessWidget {
   const _Summary({required this.icon, required this.label, required this.value, required this.color});
   final IconData icon; final String label; final int value; final Color color;
   @override
-  Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)), child: Column(children: [
+  Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(18)), child: Column(children: [
     Row(mainAxisAlignment: MainAxisAlignment.center, children: [CircleAvatar(radius: 18, backgroundColor: color.withValues(alpha: .15), child: Icon(icon, color: color, size: 20)), const SizedBox(width: 5), Flexible(child: LText(label, maxLines: 1))]),
     const SizedBox(height: 7), LText(context.money(value, compact: true), style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: color)),
   ]));
@@ -171,7 +171,7 @@ class _CategoryBreakdown extends StatelessWidget {
       if (entries.isEmpty) const Center(child: Padding(padding: EdgeInsets.all(30), child: LText('အသုံးစရိတ်မရှိသေးပါ')))
       else Row(children: [
         SizedBox(width: 145, height: 145, child: Stack(alignment: Alignment.center, children: [CustomPaint(size: const Size.square(145), painter: _DonutPainter(entries.map((e) => e.value).toList(), colors)), Column(mainAxisSize: MainAxisSize.min, children: [const LText('စုစုပေါင်း'), LText(context.money(report.expense, compact: true), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18))])])),
-        const SizedBox(width: 14), Expanded(child: Column(children: [for (var i = 0; i < math.min(5, entries.length); i++) Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(children: [Icon(Icons.circle, color: colors[i % colors.length], size: 11), const SizedBox(width: 7), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [LText(entries[i].key, maxLines: 1, overflow: TextOverflow.ellipsis), LText(context.money(entries[i].value), style: const TextStyle(color: Colors.black54, fontSize: 12))])), LText('${(entries[i].value * 100 / math.max(1, report.expense)).round()}%')]))])),
+        const SizedBox(width: 14), Expanded(child: Column(children: [for (var i = 0; i < math.min(5, entries.length); i++) Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(children: [Icon(Icons.circle, color: colors[i % colors.length], size: 11), const SizedBox(width: 7), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [LText(entries[i].key, maxLines: 1, overflow: TextOverflow.ellipsis), LText(context.money(entries[i].value), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12))])), LText('${(entries[i].value * 100 / math.max(1, report.expense)).round()}%')]))])),
       ]),
     ])));
   }

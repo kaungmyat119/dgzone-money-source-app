@@ -27,6 +27,9 @@ Myanmar-first personal finance application. Current source contains:
 - Create, edit and delete templates independently from transaction entry
 - Templates may store a zero amount for variable-value transactions
 - Latest-created transactions are always shown first
+- Transaction lists and dashboard totals refresh immediately after add/edit/delete
+- Posting a due recurring item keeps its rule and advances its next due date;
+  weekly, monthly and yearly updates are committed atomically to prevent duplicates
 - Template Management is available from Settings
 - Protected full data reset with language preference preserved
 - Receipt photo attachment from camera or gallery
@@ -36,6 +39,18 @@ Myanmar-first personal finance application. Current source contains:
   accounts, budgets and recurring transactions
 - Tap-to-open receipt images with full-screen pan and zoom
 - App-wide Myanmar/English text switching, including Settings and forms
+- Working notification permission toggle with OS-state verification, recurring
+  reminder rescheduling, per-reminder error isolation and clear permission
+  feedback without incorrectly rolling the Settings switch back
+- Bottom navigation opens recurring management directly. Scheduled income and
+  expenses are separated from receivable/payable debts; debt due dates are
+  optional, while scheduled rules retain their cadence and advance automatically
+- Adding from the receivable/payable tabs automatically assigns income/expense;
+  the unnecessary transaction-type selector is shown only for scheduled rules
+- Recurring schedules support weekly, monthly, yearly and a custom number of
+  days; custom schedules advance the next date by the chosen interval
+- Dark mode uses high-contrast light text, dark cards and adaptive secondary
+  text/surfaces throughout transaction, recurring, report and Settings screens
 - Google Drive app-private cloud sync, manual sync/restore, daily automatic
   backup and five-version retention; plus secure startup PIN lock, salted PIN
   hashing in encrypted storage, biometric unlock, lifecycle auto-lock,
@@ -74,7 +89,7 @@ Myanmar-first personal finance application. Current source contains:
    generate the standard platform runner files.
 3. Run `flutter pub get`.
 4. Run `flutter run` for an attached Android device.
-5. Run `flutter build apk --release --no-tree-shake-icons` to create a release APK. The flag is required because account/category icons are stored as code points and built at runtime.
+5. Run `flutter build apk --release` to create a release APK.
 
 Device biometric authentication still needs its production platform
 integration.

@@ -257,7 +257,7 @@ class _CategoryEditorState extends State<_CategoryEditor> {
                 width: 44,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.black26,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: .45),
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),

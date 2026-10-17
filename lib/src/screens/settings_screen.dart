@@ -51,6 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool pinLock = false;
   bool biometricLock = false;
   bool notifications = true;
+  bool notificationBusy = false;
   String currency = 'MMK';
   String dateFormat = 'dd/MM/yyyy';
   int autoLockMinutes = 1;
@@ -354,13 +355,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _toggleNotifications(bool value) async {
-    if (value && !await NotificationService.instance.requestPermission()) {
-      if (mounted) _message('Notification ခွင့်ပြုချက်မရပါ', 'Notification permission was not granted');
-      return;
+    if (notificationBusy) return;
+    final previous = notifications;
+    setState(() {
+      notificationBusy = true;
+      notifications = value;
+    });
+    try {
+      if (value && !await NotificationService.instance.requestPermission()) {
+        if (mounted) {
+          setState(() => notifications = false);
+          _message(
+            'ဖုန်း Settings မှ DGzone Money အတွက် Notification ခွင့်ပြုပါ',
+            'Allow notifications for DGzone Money in phone Settings',
+          );
+        }
+        await _saveBool('notifications', false);
+        return;
+      }
+      // Persist the choice before rebuilding reminders. Scheduling is
+      // best-effort and must not incorrectly roll this switch back.
+      await _saveBool('notifications', value);
+      await NotificationService.instance.syncRecurring(widget.database);
+      if (mounted) {
+        _message(
+          value ? 'အကြောင်းကြားချက် ဖွင့်ပြီးပါပြီ' : 'အကြောင်းကြားချက် ပိတ်ပြီးပါပြီ',
+          value ? 'Notifications enabled' : 'Notifications disabled',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => notifications = previous);
+        _message(
+          'အကြောင်းကြားချက် ပြောင်း၍မရပါ။ ထပ်စမ်းပါ',
+          'Could not change notifications. Please try again',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => notificationBusy = false);
     }
-    await _saveBool('notifications', value);
-    if (mounted) setState(() => notifications = value);
-    await NotificationService.instance.syncRecurring(widget.database);
   }
 
   Future<void> _resetData() async {
@@ -479,7 +512,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             }),
             _action(Icons.payments_outlined, 'ငွေကြေး', _chooseCurrency, value: currency),
             _action(Icons.calendar_month_outlined, 'ရက်စွဲပုံစံ', _chooseDateFormat, value: dateFormat),
-            _switch(Icons.notifications_outlined, 'အကြောင်းကြားချက်', notifications, _toggleNotifications),
+            _switch(
+              Icons.notifications_outlined,
+              'အကြောင်းကြားချက်',
+              notifications,
+              notificationBusy ? null : _toggleNotifications,
+            ),
           ]),
           _sectionTitle('စာရင်းစီမံခန့်ခွဲမှု'),
           _card([
@@ -493,7 +531,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _card([
             _action(Icons.help_outline, 'အကူအညီ', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpPrivacyScreen(page: InformationPage.help)))),
             _action(Icons.shield_outlined, 'ကိုယ်ရေးအချက်အလက် မူဝါဒ', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpPrivacyScreen(page: InformationPage.privacy)))),
-            _action(Icons.info_outline, 'App အကြောင်း', () => showAboutDialog(context: context, applicationName: 'DGzone Money', applicationVersion: '0.10.0')),
+            _action(Icons.info_outline, 'App အကြောင်း', () => showAboutDialog(context: context, applicationName: 'DGzone Money', applicationVersion: '0.10.8')),
           ]),
           const SizedBox(height: 12),
           Card(
@@ -553,7 +591,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _action(IconData icon, String title, VoidCallback? onTap, {String? value}) => ListTile(
     leading: _icon(icon), title: LText(title),
     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-      if (value != null) LText(value, style: const TextStyle(color: Colors.black54)),
+      if (value != null)
+        LText(
+          value,
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
       const Icon(Icons.chevron_right),
     ]),
     onTap: onTap,

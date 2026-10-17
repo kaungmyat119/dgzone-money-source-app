@@ -237,7 +237,7 @@ class _StepLayout extends StatelessWidget {
           const SizedBox(height: 22),
           LText(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
-          LText(description, textAlign: TextAlign.center, style: const TextStyle(height: 1.5, color: Colors.black54)),
+          LText(description, textAlign: TextAlign.center, style: TextStyle(height: 1.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 24),
           ...children,
         ]),

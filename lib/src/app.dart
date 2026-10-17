@@ -131,12 +131,15 @@ class _DgzoneMoneyAppState extends State<DgzoneMoneyApp>
       // Existing in-memory security settings remain usable.
     }
     try {
-      await widget.database
+      final posted = await widget.database
           .postDueRecurring()
           .timeout(const Duration(seconds: 20));
       await NotificationService.instance
           .syncRecurring(widget.database)
           .timeout(const Duration(seconds: 30));
+      if (posted > 0 && mounted) {
+        setState(() => revision++);
+      }
     } catch (_) {
       // Recurring/notification maintenance is optional during resume.
     }

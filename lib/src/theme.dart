@@ -11,6 +11,7 @@ abstract final class AppColors {
 }
 
 ThemeData buildTheme({Brightness brightness = Brightness.light}) {
+  final dark = brightness == Brightness.dark;
   final scheme = ColorScheme.fromSeed(
     seedColor: AppColors.emerald,
     brightness: brightness,
@@ -19,25 +20,31 @@ ThemeData buildTheme({Brightness brightness = Brightness.light}) {
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor:
-        brightness == Brightness.light ? AppColors.mintBackground : null,
-    textTheme: const TextTheme(
+    scaffoldBackgroundColor: dark ? const Color(0xFF0D1F19) : AppColors.mintBackground,
+    textTheme: TextTheme(
       headlineMedium: TextStyle(
         fontWeight: FontWeight.w800,
-        color: AppColors.ink,
+        color: scheme.onSurface,
       ),
-      titleLarge: TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink),
-      titleMedium: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
-      bodyMedium: TextStyle(color: AppColors.ink),
+      titleLarge: TextStyle(fontWeight: FontWeight.w800, color: scheme.onSurface),
+      titleMedium: TextStyle(fontWeight: FontWeight.w700, color: scheme.onSurface),
+      bodyLarge: TextStyle(color: scheme.onSurface),
+      bodyMedium: TextStyle(color: scheme.onSurface),
+      bodySmall: TextStyle(color: scheme.onSurfaceVariant),
     ),
     cardTheme: CardThemeData(
       elevation: 0,
-      color: brightness == Brightness.light ? Colors.white : null,
+      color: dark ? const Color(0xFF173128) : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     ),
-    navigationBarTheme: const NavigationBarThemeData(
-      indicatorColor: AppColors.mintSoft,
-      backgroundColor: Colors.white,
+    navigationBarTheme: NavigationBarThemeData(
+      indicatorColor: dark ? const Color(0xFF24513E) : AppColors.mintSoft,
+      backgroundColor: dark ? const Color(0xFF132A22) : Colors.white,
+    ),
+    dividerColor: scheme.outlineVariant,
+    listTileTheme: ListTileThemeData(
+      textColor: scheme.onSurface,
+      iconColor: scheme.onSurfaceVariant,
     ),
   );
 }

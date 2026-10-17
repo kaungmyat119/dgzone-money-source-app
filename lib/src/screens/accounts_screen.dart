@@ -199,7 +199,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                     const SizedBox(height: 6),
                     LText(
                       balancesVisible ? context.money(total) : '•••••• ${AppPreferencesScope.of(context).currency}',
-                      style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: AppColors.emeraldDark),
+                      style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF8CF0BD) : AppColors.emeraldDark),
                     ),
                     const SizedBox(height: 14),
                     Row(children: [
@@ -375,7 +375,7 @@ class _AccountCard extends StatelessWidget {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: color)),
               ]),
               const SizedBox(height: 3),
-              LText(maskedNumber, style: const TextStyle(color: Colors.black54)),
+              LText(maskedNumber, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
               if (progress != null) ...[
                 const SizedBox(height: 9),
                 Row(children: [

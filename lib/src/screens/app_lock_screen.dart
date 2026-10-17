@@ -89,7 +89,7 @@ class _AppLockScreenState extends State<AppLockScreen> {
           const Spacer(),
           Image.asset('assets/images/dgzone_money_logo.png', height: 84),
           const SizedBox(height: 12),
-          const LText('DGzone Money', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: AppColors.emeraldDark)),
+          LText('DGzone Money', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF8CF0BD) : AppColors.emeraldDark)),
           const SizedBox(height: 22),
           LText(blocked ? '$seconds စက္ကန့်ကြာမှ ပြန်ကြိုးစားပါ' : 'App ဖွင့်ရန် PIN ထည့်ပါ', style: const TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 14),

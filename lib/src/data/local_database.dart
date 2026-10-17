@@ -15,7 +15,7 @@ class LocalDatabase {
     final root = await getDatabasesPath();
     _database = await openDatabase(
       p.join(root, 'dgzone_money.db'),
-      version: 9,
+      version: 11,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) async {
         await db.execute('''
@@ -93,6 +93,12 @@ class LocalDatabase {
           await db.execute('ALTER TABLE accounts ADD COLUMN icon_code_point INTEGER NOT NULL DEFAULT 59638');
           await db.execute('ALTER TABLE accounts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
         }
+        if (oldVersion < 10) await _migrateRecurringKinds(db);
+        if (oldVersion >= 10 && oldVersion < 11) {
+          await db.execute(
+            'ALTER TABLE recurring_transactions ADD COLUMN interval_days INTEGER',
+          );
+        }
       },
     );
   }
@@ -120,14 +126,31 @@ class LocalDatabase {
         account_id INTEGER NOT NULL,
         type TEXT NOT NULL CHECK(type IN ('income','expense')),
         amount INTEGER NOT NULL CHECK(amount > 0),
-        frequency TEXT NOT NULL CHECK(frequency IN ('weekly','monthly','yearly')),
-        next_run TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'scheduled' CHECK(kind IN ('scheduled','receivable','payable')),
+        frequency TEXT CHECK(frequency IS NULL OR frequency IN ('weekly','monthly','yearly','custom')),
+        interval_days INTEGER CHECK(interval_days IS NULL OR interval_days > 0),
+        next_run TEXT,
         enabled INTEGER NOT NULL DEFAULT 1,
         reminder_days INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL,
         FOREIGN KEY(account_id) REFERENCES accounts(id)
       )
     ''');
+  }
+
+  static Future<void> _migrateRecurringKinds(DatabaseExecutor db) async {
+    await db.execute('ALTER TABLE recurring_transactions RENAME TO recurring_transactions_old');
+    await _createRecurringTable(db);
+    await db.execute('''
+      INSERT INTO recurring_transactions (
+        id, title, category, account_id, type, amount, kind, frequency,
+        next_run, enabled, reminder_days, created_at
+      )
+      SELECT id, title, category, account_id, type, amount, 'scheduled',
+        frequency, next_run, enabled, reminder_days, created_at
+      FROM recurring_transactions_old
+    ''');
+    await db.execute('DROP TABLE recurring_transactions_old');
   }
 
   static Future<void> _migrateTemplatesAllowZero(DatabaseExecutor db) async {
@@ -723,7 +746,9 @@ class LocalDatabase {
       FROM recurring_transactions r
       LEFT JOIN accounts a ON a.id=r.account_id
       LEFT JOIN money_categories c ON c.name=r.category AND c.type=r.type
-      ORDER BY r.enabled DESC, datetime(r.next_run), r.id DESC
+      ORDER BY r.enabled DESC,
+        CASE WHEN r.next_run IS NULL THEN 1 ELSE 0 END,
+        datetime(r.next_run), r.id DESC
     ''');
     return rows
         .map(
@@ -734,8 +759,12 @@ class LocalDatabase {
             accountId: row['account_id'] as int,
             type: TransactionType.values.byName(row['type'] as String),
             amount: row['amount'] as int,
-            frequency: row['frequency'] as String,
-            nextRun: DateTime.parse(row['next_run'] as String),
+            kind: row['kind'] as String? ?? 'scheduled',
+            frequency: row['frequency'] as String?,
+            intervalDays: row['interval_days'] as int?,
+            nextRun: row['next_run'] == null
+                ? null
+                : DateTime.parse(row['next_run'] as String),
             enabled: (row['enabled'] as int) == 1,
             reminderDays: row['reminder_days'] as int,
             accountName: row['account_name'] as String? ?? '',
@@ -753,8 +782,10 @@ class LocalDatabase {
     required int accountId,
     required TransactionType type,
     required int amount,
-    required String frequency,
-    required DateTime nextRun,
+    required String kind,
+    String? frequency,
+    int? intervalDays,
+    DateTime? nextRun,
     required bool enabled,
     required int reminderDays,
   }) async {
@@ -764,8 +795,10 @@ class LocalDatabase {
       'account_id': accountId,
       'type': type.name,
       'amount': amount,
+      'kind': kind,
       'frequency': frequency,
-      'next_run': nextRun.toIso8601String(),
+      'interval_days': intervalDays,
+      'next_run': nextRun?.toIso8601String(),
       'enabled': enabled ? 1 : 0,
       'reminder_days': reminderDays,
     };
@@ -797,39 +830,51 @@ class LocalDatabase {
 
   Future<int> postDueRecurring() async {
     final now = DateTime.now();
-    final due = (await recurringTransactions())
-        .where((item) => item.enabled && !item.nextRun.isAfter(now))
-        .toList();
-    var posted = 0;
-    for (final item in due) {
-      var runAt = item.nextRun;
-      var safety = 0;
-      while (!runAt.isAfter(now) && safety < 120) {
-        await saveTransaction(
-          title: item.title,
-          category: item.category,
-          accountId: item.accountId,
-          type: item.type,
-          amount: item.amount,
-          occurredAt: runAt,
-          note: 'ပုံမှန်စာရင်းမှ အလိုအလျောက်ထည့်ထားသည်',
-        );
-        runAt = switch (item.frequency) {
-          'weekly' => runAt.add(const Duration(days: 7)),
-          'yearly' => _clampedDate(runAt.year + 1, runAt.month, runAt.day),
-          _ => _clampedDate(runAt.year, runAt.month + 1, runAt.day),
-        };
-        posted++;
-        safety++;
-      }
-      await db.update(
+    return db.transaction((txn) async {
+      final due = await txn.query(
         'recurring_transactions',
-        {'next_run': runAt.toIso8601String()},
-        where: 'id=?',
-        whereArgs: [item.id],
+        where: "enabled = 1 AND kind = 'scheduled' AND next_run IS NOT NULL AND datetime(next_run) <= datetime(?)",
+        whereArgs: [now.toIso8601String()],
+        orderBy: 'datetime(next_run), id',
       );
-    }
-    return posted;
+      var posted = 0;
+      for (final item in due) {
+        var runAt = DateTime.parse(item['next_run'] as String);
+        var safety = 0;
+        while (!runAt.isAfter(now) && safety < 120) {
+          await txn.insert('transactions', {
+            'title': item['title'] as String,
+            'category': item['category'] as String,
+            'account_id': item['account_id'] as int,
+            'type': item['type'] as String,
+            'amount': item['amount'] as int,
+            'occurred_at': runAt.toIso8601String(),
+            'note': 'ပုံမှန်စာရင်းမှ အလိုအလျောက်ထည့်ထားသည်',
+            'created_at': DateTime.now().toIso8601String(),
+          });
+          final frequency = item['frequency'] as String;
+          runAt = switch (frequency) {
+            'weekly' => runAt.add(const Duration(days: 7)),
+            'yearly' => _clampedDate(runAt.year + 1, runAt.month, runAt.day),
+            'custom' => runAt.add(
+                Duration(days: (item['interval_days'] as int?) ?? 1),
+              ),
+            _ => _clampedDate(runAt.year, runAt.month + 1, runAt.day),
+          };
+          posted++;
+          safety++;
+        }
+
+        // Keep the recurring rule. Only advance its next due date.
+        await txn.update(
+          'recurring_transactions',
+          {'next_run': runAt.toIso8601String()},
+          where: 'id = ?',
+          whereArgs: [item['id'] as int],
+        );
+      }
+      return posted;
+    });
   }
 
   DateTime _clampedDate(int year, int month, int day) {

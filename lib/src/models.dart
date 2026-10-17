@@ -154,7 +154,9 @@ class RecurringTransaction {
     required this.accountId,
     required this.type,
     required this.amount,
+    required this.kind,
     required this.frequency,
+    required this.intervalDays,
     required this.nextRun,
     required this.enabled,
     required this.reminderDays,
@@ -169,21 +171,27 @@ class RecurringTransaction {
   final int accountId;
   final TransactionType type;
   final int amount;
-  final String frequency;
-  final DateTime nextRun;
+  final String kind;
+  final String? frequency;
+  final int? intervalDays;
+  final DateTime? nextRun;
   final bool enabled;
   final int reminderDays;
   final String accountName;
   final int categoryColorValue;
   final int categoryIconCodePoint;
 
-  bool get dueSoon =>
-      enabled && nextRun.difference(DateTime.now()).inDays <= reminderDays;
+  bool get dueSoon {
+    final due = nextRun;
+    return enabled && due != null && due.difference(DateTime.now()).inDays <= reminderDays;
+  }
 
   int get daysUntilDue {
     final today = DateTime.now();
     final start = DateTime(today.year, today.month, today.day);
-    final due = DateTime(nextRun.year, nextRun.month, nextRun.day);
+    final value = nextRun;
+    if (value == null) return 999999;
+    final due = DateTime(value.year, value.month, value.day);
     return due.difference(start).inDays;
   }
 }
