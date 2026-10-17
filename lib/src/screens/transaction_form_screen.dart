@@ -32,6 +32,7 @@ class TransactionFormScreen extends StatefulWidget {
 }
 
 class _TransactionFormScreenState extends State<TransactionFormScreen> {
+  static const transferCategory = 'ငွေလွှဲ';
   final formKey = GlobalKey<FormState>();
   late final TextEditingController amountController;
   late final TextEditingController titleController;
@@ -218,7 +219,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     await widget.database.saveTransaction(
       id: widget.transaction?.id,
       title: titleController.text,
-      category: category,
+      category: type == TransactionType.transfer ? transferCategory : category,
       accountId: accountId!,
       type: type,
       amount: int.parse(amountController.text.replaceAll(',', '')),
@@ -254,9 +255,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       type = template.type;
       titleController.text = template.title;
       amountController.text = template.amount.toString();
-      category = categories.contains(template.category)
-          ? template.category
-          : categories.last;
+      category = type == TransactionType.transfer
+          ? transferCategory
+          : categories.contains(template.category)
+              ? template.category
+              : categories.last;
       accountId = accountIds.contains(template.accountId)
           ? template.accountId
           : accounts.firstOrNull?.id;
@@ -305,7 +308,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     await widget.database.saveTransactionTemplate(
       name: name,
       title: titleController.text,
-      category: category,
+      category: type == TransactionType.transfer ? transferCategory : category,
       accountId: accountId!,
       type: type,
       amount: int.parse(amountController.text.replaceAll(',', '')),
@@ -379,7 +382,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   onSelectionChanged: (value) {
                     setState(() {
                       type = value.first;
-                      category = categories.first;
+                      category = type == TransactionType.transfer
+                          ? transferCategory
+                          : categories.first;
                     });
                   },
                 ),
@@ -448,7 +453,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       (value ?? '').trim().isEmpty ? 'အကြောင်းအရာထည့်ပါ' : null,
                 ),
                 const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
+                if (type != TransactionType.transfer) DropdownButtonFormField<String>(
                   value: categories.contains(category)
                       ? category
                       : categories.last,
@@ -466,7 +471,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       .toList(),
                   onChanged: (value) => setState(() => category = value!),
                 ),
-                const SizedBox(height: 14),
+                if (type != TransactionType.transfer) const SizedBox(height: 14),
                 DropdownButtonFormField<int>(
                   value: accountId,
                   decoration: InputDecoration(

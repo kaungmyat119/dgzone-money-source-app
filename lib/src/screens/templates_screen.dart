@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/local_database.dart';
 import '../models.dart';
@@ -246,6 +247,7 @@ class TemplateEditorScreen extends StatefulWidget {
 }
 
 class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
+  static const transferCategory = 'ငွေလွှဲ';
   final formKey = GlobalKey<FormState>();
   late final TextEditingController nameController;
   late final TextEditingController titleController;
@@ -317,7 +319,7 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
       id: widget.template?.id,
       name: nameController.text,
       title: titleController.text,
-      category: category,
+      category: type == TransactionType.transfer ? transferCategory : category,
       accountId: accountId!,
       targetAccountId:
           type == TransactionType.transfer ? targetAccountId : null,
@@ -377,7 +379,9 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
                   selected: {type},
                   onSelectionChanged: (values) => setState(() {
                     type = values.first;
-                    category = categories.first;
+                    category = type == TransactionType.transfer
+                        ? transferCategory
+                        : categories.first;
                   }),
                 ),
                 const SizedBox(height: 16),
@@ -425,7 +429,7 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
+                if (type != TransactionType.transfer) DropdownButtonFormField<String>(
                   value: categories.contains(category)
                       ? category
                       : categories.last,
@@ -443,7 +447,7 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
                       .toList(),
                   onChanged: (value) => setState(() => category = value!),
                 ),
-                const SizedBox(height: 12),
+                if (type != TransactionType.transfer) const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   value: accountId,
                   decoration: InputDecoration(

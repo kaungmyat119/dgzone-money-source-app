@@ -37,6 +37,8 @@ Myanmar-first personal finance application. Current source contains:
 - Full-screen amount calculator with quick-value keys and arithmetic
 - Calculator entry for every money amount field, including templates,
   accounts, budgets and recurring transactions
+- Account-to-account transfers no longer ask for a category; an internal
+  transfer label is assigned automatically in entries and quick templates
 - Tap-to-open receipt images with full-screen pan and zoom
 - App-wide Myanmar/English text switching, including Settings and forms
 - Working notification permission toggle with OS-state verification, recurring
@@ -89,7 +91,7 @@ Myanmar-first personal finance application. Current source contains:
    generate the standard platform runner files.
 3. Run `flutter pub get`.
 4. Run `flutter run` for an attached Android device.
-5. Run `flutter build apk --release --no-tree-shake-icons` to create a release APK (the flag is required because account/category icons are stored as code points).
+5. Run `flutter build apk --release` to create a release APK.
 
 Device biometric authentication still needs its production platform
 integration.
