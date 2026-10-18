@@ -31,11 +31,15 @@ class NotificationService {
       final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       if (androidPlugin != null) {
+        // Always trust the current OS state first. Some Android/OEM versions
+        // return false from a repeated permission request even though the user
+        // has already enabled notifications in the phone's App settings.
+        final enabledBefore = await androidPlugin.areNotificationsEnabled();
+        if (enabledBefore == true) return true;
+
         final requested = await androidPlugin.requestNotificationsPermission();
-        if (requested == false) return false;
-        // Older Android versions can return null because runtime permission is
-        // not required. The OS status is authoritative when it is available.
-        return await androidPlugin.areNotificationsEnabled() ?? requested ?? true;
+        final enabledAfter = await androidPlugin.areNotificationsEnabled();
+        return enabledAfter ?? requested ?? true;
       }
 
       final iosPlugin = _plugin.resolvePlatformSpecificImplementation<

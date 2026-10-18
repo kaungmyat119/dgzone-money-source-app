@@ -44,6 +44,8 @@ Myanmar-first personal finance application. Current source contains:
 - Working notification permission toggle with OS-state verification, recurring
   reminder rescheduling, per-reminder error isolation and clear permission
   feedback without incorrectly rolling the Settings switch back
+- Android notification enabling checks the current OS permission before asking
+  again, avoiding false denial results on devices where permission is allowed
 - Bottom navigation opens recurring management directly. Scheduled income and
   expenses are separated from receivable/payable debts; debt due dates are
   optional, while scheduled rules retain their cadence and advance automatically
