@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/local_database.dart';
 import '../models.dart';
@@ -141,10 +142,13 @@ class _RecurringScreenState extends State<RecurringScreen> {
           final monthlyExpense = scheduled
               .where((item) => item.type == TransactionType.expense)
               .fold<int>(0, (sum, item) => sum + _monthlyAmount(item));
-          final receivableTotal = active
+          // Debt totals represent every outstanding debt record. The enabled
+          // switch controls reminders only, so disabled reminders must still
+          // remain in the receivable/payable totals.
+          final receivableTotal = items
               .where((item) => item.kind == 'receivable')
               .fold<int>(0, (sum, item) => sum + item.amount);
-          final payableTotal = active
+          final payableTotal = items
               .where((item) => item.kind == 'payable')
               .fold<int>(0, (sum, item) => sum + item.amount);
           final datedScheduled = scheduled.where((item) => item.nextRun != null).toList()
@@ -468,9 +472,9 @@ class _RecurringTotalsCard extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18))),
             const SizedBox(height: 12),
             Row(children: [
-              Expanded(child: _total(context, Icons.people_alt, 'ရရန်', income, AppColors.emerald)),
+              Expanded(child: _total(context, Icons.people_alt, 'စုစုပေါင်း ရရန်', income, AppColors.emerald)),
               const VerticalDivider(),
-              Expanded(child: _total(context, Icons.handshake, 'ပေးရန်', expense, AppColors.coral)),
+              Expanded(child: _total(context, Icons.handshake, 'စုစုပေါင်း ပေးရန်', expense, AppColors.coral)),
             ]),
           ]),
         ),
