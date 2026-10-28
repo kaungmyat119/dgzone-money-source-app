@@ -63,6 +63,8 @@ class MoneyTransaction {
     this.locationLabel,
     this.latitude,
     this.longitude,
+    this.categoryIconCodePoint,
+    this.categoryColorValue,
   });
 
   final int id;
@@ -78,6 +80,8 @@ class MoneyTransaction {
   final String? locationLabel;
   final double? latitude;
   final double? longitude;
+  final int? categoryIconCodePoint;
+  final int? categoryColorValue;
 }
 
 class TransactionTemplate {

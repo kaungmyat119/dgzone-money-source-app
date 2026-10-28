@@ -373,11 +373,16 @@ class LocalDatabase {
     ''')).first;
     final income = summary['income'] as int;
     final expense = summary['expense'] as int;
-    final recentRows = await db.query(
-      'transactions',
-      orderBy: 'id DESC',
-      limit: 5,
-    );
+    final recentRows = await db.rawQuery('''
+      SELECT t.*,
+        c.icon_code_point AS category_icon_code_point,
+        c.color_value AS category_color_value
+      FROM transactions t
+      LEFT JOIN money_categories c
+        ON c.name=t.category AND c.type=t.type
+      ORDER BY t.id DESC
+      LIMIT 5
+    ''');
     final categories = await db.rawQuery('''
       SELECT category, SUM(amount) total
       FROM transactions
@@ -915,6 +920,8 @@ class LocalDatabase {
       locationLabel: map['location_label'] as String?,
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
+      categoryIconCodePoint: map['category_icon_code_point'] as int?,
+      categoryColorValue: map['category_color_value'] as int?,
     );
   }
 }

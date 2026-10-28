@@ -670,14 +670,17 @@ class _TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final income = transaction.type == TransactionType.income;
-    final color = income ? AppColors.emerald : AppColors.coral;
-    final icon = income
-        ? Icons.payments
-        : transaction.category.contains('စား')
-            ? Icons.restaurant
-            : transaction.category.contains('ပို့')
-                ? Icons.local_gas_station
-                : Icons.receipt_long;
+    final color = transaction.categoryColorValue == null
+        ? (income ? AppColors.emerald : AppColors.coral)
+        : Color(transaction.categoryColorValue!);
+    final icon = transaction.type == TransactionType.transfer
+        ? Icons.swap_horiz
+        : transaction.categoryIconCodePoint == null
+            ? (income ? Icons.payments : Icons.receipt_long)
+            : IconData(
+                transaction.categoryIconCodePoint!,
+                fontFamily: 'MaterialIcons',
+              );
     return ListTile(
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
