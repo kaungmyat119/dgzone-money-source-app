@@ -140,7 +140,8 @@ class _DgzoneMoneyAppState extends State<DgzoneMoneyApp>
       if (posted > 0 && mounted) {
         setState(() => revision++);
       }
-    } catch (_) {
+    } catch (error, stack) {
+      debugPrint('DGZ resume maintenance failed: $error\n$stack');
       // Recurring/notification maintenance is optional during resume.
     }
     unawaited(

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../data/local_database.dart';
@@ -130,8 +132,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         lastCloudBackup = DateTime.now().toUtc().toIso8601String();
       });
       _message('Cloud ချိတ်ဆက်ပြီး ပထမ Backup သိမ်းပြီးပါပြီ', 'Cloud connected and the first backup was saved');
-    } catch (error) {
-      if (mounted) _message('Cloud ချိတ်ဆက်၍မရပါ။ အင်တာနက်နှင့် Google configuration ကိုစစ်ပါ', 'Could not connect to cloud. Check internet and Google configuration');
+    } catch (error, stack) {
+      debugPrint('DGZ cloud: connect failed: $error\n$stack');
+      if (mounted) _cloudError('Cloud ချိတ်ဆက်၍မရပါ', 'Could not connect to cloud', error);
     } finally {
       if (mounted) setState(() => cloudBusy = false);
     }
@@ -159,8 +162,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         lastCloudBackup = result.createdAt?.toIso8601String() ?? DateTime.now().toUtc().toIso8601String();
       });
       _message('Google Drive သို့ Backup သိမ်းပြီးပါပြီ', 'Backup saved to Google Drive');
-    } catch (_) {
-      if (mounted) _message('Cloud Backup မအောင်မြင်ပါ', 'Cloud backup failed');
+    } catch (error, stack) {
+      debugPrint('DGZ cloud: backup failed: $error\n$stack');
+      if (mounted) _cloudError('Cloud Backup မအောင်မြင်ပါ', 'Cloud backup failed', error);
     } finally {
       if (mounted) setState(() => cloudBusy = false);
     }
@@ -181,11 +185,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await CloudBackupService.instance.restoreLatest(widget.database);
       widget.onDataChanged();
       if (mounted) _message('Cloud Backup ပြန်သွင်းပြီးပါပြီ', 'Cloud backup restored');
-    } catch (_) {
-      if (mounted) _message('Cloud Backup ပြန်သွင်း၍မရပါ', 'Unable to restore cloud backup');
+    } catch (error, stack) {
+      debugPrint('DGZ cloud: restore failed: $error\n$stack');
+      if (mounted) _cloudError('Cloud Backup ပြန်သွင်း၍မရပါ', 'Unable to restore cloud backup', error);
     } finally {
       if (mounted) setState(() => cloudBusy = false);
     }
+  }
+
+  void _cloudError(String myanmar, String english, Object error) {
+    final text = error.toString();
+    final String reason;
+    if (text.contains('sign_in_failed') && text.contains(': 10:')) {
+      // DEVELOPER_ERROR: no Android OAuth client matches this package + SHA-1.
+      reason = 'Google sign-in is not configured for this app build (error 10)';
+    } else if (text.contains('sign_in_failed') && text.contains('12500')) {
+      reason = 'Google OAuth consent screen is not configured (error 12500)';
+    } else if (text.contains('network_error') || error is SocketException) {
+      reason = 'No internet connection';
+    } else {
+      reason = text.length > 160 ? '${text.substring(0, 160)}…' : text;
+    }
+    _message('$myanmar\n$reason', '$english\n$reason');
   }
 
   Future<void> _saveBool(String key, bool value) =>
@@ -383,7 +404,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           value ? 'Notifications enabled' : 'Notifications disabled',
         );
       }
-    } catch (_) {
+    } catch (error, stack) {
+      debugPrint('DGZ notifications: toggle failed: $error\n$stack');
       if (mounted) {
         setState(() => notifications = previous);
         _message(
@@ -393,6 +415,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } finally {
       if (mounted) setState(() => notificationBusy = false);
+    }
+  }
+
+  Future<void> _sendTestNotification() async {
+    try {
+      await NotificationService.instance.scheduleTest();
+      if (mounted) {
+        _message(
+          'စက္ကန့် ၁၀ အတွင်း စမ်းသပ် အကြောင်းကြားချက် ရောက်ပါမည်',
+          'A test notification will arrive in about 10 seconds',
+        );
+      }
+    } catch (error, stack) {
+      debugPrint('DGZ notifications: test failed: $error\n$stack');
+      if (mounted) {
+        _message(
+          'စမ်းသပ် အကြောင်းကြားချက် မအောင်မြင်ပါ: $error',
+          'Test notification failed: $error',
+        );
+      }
     }
   }
 
@@ -518,6 +560,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               notifications,
               notificationBusy ? null : _toggleNotifications,
             ),
+            if (notifications)
+              _action(Icons.notification_add_outlined, 'စမ်းသပ် အကြောင်းကြားချက် ပို့ရန်', _sendTestNotification),
           ]),
           _sectionTitle('စာရင်းစီမံခန့်ခွဲမှု'),
           _card([

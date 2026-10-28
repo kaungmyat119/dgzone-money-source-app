@@ -29,7 +29,8 @@ void callbackDispatcher() {
           .runAutomaticBackupIfDue(database)
           .timeout(const Duration(minutes: 2));
       return true;
-    } catch (_) {
+    } catch (error, stack) {
+      debugPrint('DGZ background task failed: $error\n$stack');
       return false;
     }
   });
@@ -101,7 +102,8 @@ class _StartupAppState extends State<_StartupApp> {
             existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
           )
           .timeout(const Duration(seconds: 15));
-    } catch (_) {
+    } catch (error, stack) {
+      debugPrint('DGZ workmanager: registration failed: $error\n$stack');
       // Optional background work must never block app startup.
     }
     try {
@@ -112,7 +114,8 @@ class _StartupAppState extends State<_StartupApp> {
       await NotificationService.instance
           .syncRecurring(database)
           .timeout(const Duration(seconds: 30));
-    } catch (_) {
+    } catch (error, stack) {
+      debugPrint('DGZ notifications: startup sync failed: $error\n$stack');
       // The app remains usable even when notification setup is unavailable.
     }
   }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
@@ -113,14 +114,22 @@ class CloudBackupService {
 
   Future<void> syncIfEnabled(LocalDatabase database) async {
     if (await database.readSetting('cloud_sync') != 'true') return;
-    try { await upload(database, interactive: false); } catch (_) {}
+    try {
+      await upload(database, interactive: false);
+    } catch (error) {
+      debugPrint('DGZ cloud: sync upload failed: $error');
+    }
   }
 
   Future<void> runAutomaticBackupIfDue(LocalDatabase database) async {
     if (await database.readSetting('auto_backup') != 'true') return;
     final last = DateTime.tryParse(await database.readSetting('last_cloud_backup_at') ?? '');
     if (last != null && DateTime.now().toUtc().difference(last).inHours < 24) return;
-    try { await upload(database, interactive: false); } catch (_) {}
+    try {
+      await upload(database, interactive: false);
+    } catch (error) {
+      debugPrint('DGZ cloud: automatic backup failed: $error');
+    }
   }
 
   Future<void> _prune(drive.DriveApi api) async {

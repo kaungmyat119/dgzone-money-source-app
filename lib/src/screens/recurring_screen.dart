@@ -64,7 +64,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
       unawaited(
         NotificationService.instance
             .syncRecurring(widget.database)
-            .catchError((_) {}),
+            .catchError((Object error) => debugPrint('DGZ notifications: sync failed: $error')),
       );
     }
   }
@@ -77,7 +77,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
     unawaited(
       NotificationService.instance
           .syncRecurring(widget.database)
-          .catchError((_) {}),
+          .catchError((Object error) => debugPrint('DGZ notifications: sync failed: $error')),
     );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -215,7 +215,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
                       unawaited(
                         NotificationService.instance
                             .syncRecurring(widget.database)
-                            .catchError((_) {}),
+                            .catchError((Object error) => debugPrint('DGZ notifications: sync failed: $error')),
                       );
                     },
                   ),

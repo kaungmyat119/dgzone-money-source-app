@@ -147,6 +147,7 @@ class AppStrings {
     'PIN မှားနေပါသည်': 'Incorrect PIN',
     'Notification ခွင့်ပြုချက်မရပါ': 'Notification permission was not granted',
     'ငွေကြေး': 'Currency', 'ရက်စွဲပုံစံ': 'Date format', 'အကြောင်းကြားချက်': 'Notifications',
+    'စမ်းသပ် အကြောင်းကြားချက် ပို့ရန်': 'Send test notification',
     'အကူအညီနှင့် အခြား': 'Help & more', 'အကူအညီ': 'Help',
     'ကိုယ်ရေးအချက်အလက် မူဝါဒ': 'Privacy policy', 'App အကြောင်း': 'About app',
     '၁။ Account စတင်ထည့်ရန်': '1. Create an account',
