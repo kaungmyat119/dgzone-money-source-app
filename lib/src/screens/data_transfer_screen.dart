@@ -2,6 +2,8 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../data/local_database.dart';
@@ -227,11 +229,7 @@ class _DataTransferScreenState extends State<DataTransferScreen>
   }
 
   Future<void> _restoreBackup() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['dgzbackup', 'json'],
-    );
-    final path = result?.files.single.path;
+    final path = await _pickBackupPath();
     if (path == null || !mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -254,6 +252,60 @@ class _DataTransferScreenState extends State<DataTransferScreen>
       if (mounted) _notice('Backup ဖိုင်မမှန်ပါ');
     } finally {
       if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<String?> _pickBackupPath() async {
+    try {
+      // Android document providers do not consistently expose custom MIME
+      // types for .dgzbackup files. Let the user select first, then validate.
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withReadStream: true,
+      );
+      if (result == null || result.files.isEmpty) return null;
+
+      final picked = result.files.single;
+      final extension = p.extension(picked.name).toLowerCase();
+      if (!const {'.dgzbackup', '.json', '.zip'}.contains(extension)) {
+        if (mounted) _notice('DGzone Backup ဖိုင် (.dgzbackup) ကိုရွေးပါ');
+        return null;
+      }
+
+      final directPath = picked.path;
+      if (directPath != null && await File(directPath).exists()) {
+        return directPath;
+      }
+
+      // Cloud and vendor document providers can return a content URI without
+      // a filesystem path. Cache its stream for the restore service.
+      final stream = picked.readStream;
+      if (stream == null) {
+        if (mounted) _notice('ရွေးထားသော Backup ဖိုင်ကို ဖတ်၍မရပါ');
+        return null;
+      }
+      final temporary = await getTemporaryDirectory();
+      final safeName = picked.name.replaceAll(
+        RegExp(r'[^A-Za-z0-9._-]'),
+        '_',
+      );
+      final cached = File(
+        p.join(
+          temporary.path,
+          'restore_${DateTime.now().microsecondsSinceEpoch}_$safeName',
+        ),
+      );
+      final sink = cached.openWrite();
+      try {
+        await sink.addStream(stream);
+      } finally {
+        await sink.close();
+      }
+      return cached.path;
+    } catch (error) {
+      if (mounted) _notice('Backup ဖိုင်ရွေး၍မရပါ: $error');
+      return null;
     }
   }
 
