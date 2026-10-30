@@ -58,6 +58,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     'အခြား',
   ];
   List<String> incomeCategories = ['လစာ', 'စီးပွားရေး', 'အပိုဝင်ငွေ', 'အခြား'];
+  List<MoneyCategory> categoryItems = const [];
 
   @override
   void initState() {
@@ -90,6 +91,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     ]);
     if (!mounted) return;
     setState(() {
+      categoryItems = [
+        ...(result[0] as List<MoneyCategory>),
+        ...(result[1] as List<MoneyCategory>),
+      ];
       expenseCategories = result[0].map((item) => item.name).toList();
       incomeCategories = result[1].map((item) => item.name).toList();
       if (!categories.contains(category) && categories.isNotEmpty) category = categories.first;
@@ -107,6 +112,25 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
   List<String> get categories =>
       type == TransactionType.income ? incomeCategories : expenseCategories;
+
+  String categoryLabel(String name) {
+    MoneyCategory? item;
+    for (final value in categoryItems) {
+      if (value.type == type && value.name == name) {
+        item = value;
+        break;
+      }
+    }
+    if (item?.parentId == null) return name;
+    MoneyCategory? parent;
+    for (final value in categoryItems) {
+      if (value.id == item!.parentId) {
+        parent = value;
+        break;
+      }
+    }
+    return parent == null ? name : '${parent.name} › $name';
+  }
 
   Future<void> pickDate() async {
     final result = await showDatePicker(
@@ -465,7 +489,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       .map(
                         (value) => DropdownMenuItem(
                           value: value,
-                          child: LText(value),
+                          child: LText(categoryLabel(value)),
                         ),
                       )
                       .toList(),

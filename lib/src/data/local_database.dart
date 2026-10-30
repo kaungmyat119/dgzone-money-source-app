@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:path/path.dart' as p;
@@ -15,7 +16,7 @@ class LocalDatabase {
     final root = await getDatabasesPath();
     _database = await openDatabase(
       p.join(root, 'dgzone_money.db'),
-      version: 11,
+      version: 12,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) async {
         await db.execute('''
@@ -97,6 +98,11 @@ class LocalDatabase {
         if (oldVersion >= 10 && oldVersion < 11) {
           await db.execute(
             'ALTER TABLE recurring_transactions ADD COLUMN interval_days INTEGER',
+          );
+        }
+        if (oldVersion >= 8 && oldVersion < 12) {
+          await db.execute(
+            'ALTER TABLE money_categories ADD COLUMN parent_id INTEGER',
           );
         }
       },
@@ -206,6 +212,7 @@ class LocalDatabase {
         color_value INTEGER NOT NULL,
         icon_code_point INTEGER NOT NULL,
         sort_order INTEGER NOT NULL DEFAULT 0,
+        parent_id INTEGER,
         created_at TEXT NOT NULL,
         UNIQUE(name, type)
       )
@@ -307,7 +314,14 @@ class LocalDatabase {
     final rows = await db.rawQuery('''
       SELECT c.*, COALESCE(SUM(t.amount), 0) total_amount
       FROM money_categories c
-      LEFT JOIN transactions t ON t.category=c.name AND t.type=c.type
+      LEFT JOIN transactions t ON t.type=c.type AND (
+        t.category=c.name OR (
+          c.parent_id IS NULL AND t.category IN (
+            SELECT child.name FROM money_categories child
+            WHERE child.parent_id=c.id
+          )
+        )
+      )
       WHERE c.type=?
       GROUP BY c.id
       ORDER BY c.sort_order, c.id
@@ -319,6 +333,7 @@ class LocalDatabase {
       colorValue: row['color_value'] as int,
       iconCodePoint: row['icon_code_point'] as int,
       sortOrder: row['sort_order'] as int,
+      parentId: row['parent_id'] as int?,
       totalAmount: row['total_amount'] as int,
     )).toList();
   }
@@ -329,10 +344,12 @@ class LocalDatabase {
     required TransactionType type,
     required int colorValue,
     required int iconCodePoint,
+    int? parentId,
   }) async {
     final values = <String, Object?>{
       'name': name.trim(), 'type': type.name, 'color_value': colorValue,
       'icon_code_point': iconCodePoint,
+      'parent_id': parentId,
     };
     if (id == null) {
       values['sort_order'] = Sqflite.firstIntValue(await db.rawQuery(
@@ -347,7 +364,15 @@ class LocalDatabase {
   }
 
   Future<void> deleteCategory(int id) async {
-    await db.delete('money_categories', where: 'id=?', whereArgs: [id]);
+    await db.transaction((txn) async {
+      await txn.update(
+        'money_categories',
+        {'parent_id': null},
+        where: 'parent_id=?',
+        whereArgs: [id],
+      );
+      await txn.delete('money_categories', where: 'id=?', whereArgs: [id]);
+    });
   }
 
   Future<void> reorderCategories(TransactionType type, List<int> ids) async {
@@ -620,41 +645,60 @@ class LocalDatabase {
   }
 
   Future<List<BudgetProgress>> budgets() async {
-    final rows = await db.rawQuery('''
-      SELECT b.*,
-        COALESCE(SUM(CASE WHEN t.type='expense' THEN t.amount ELSE 0 END), 0) spent_amount
-      FROM budgets b
-      LEFT JOIN transactions t ON t.category=b.category
-        AND datetime(t.occurred_at) BETWEEN datetime(b.period_start) AND datetime(b.period_end)
-      GROUP BY b.id
-      ORDER BY b.period_start DESC, b.name
-    ''');
+    final rows = await db.query(
+      'budgets',
+      orderBy: 'period_start DESC, name',
+    );
+    final expenseTransactions = await transactions(type: TransactionType.expense);
     return rows
         .map(
-          (row) => BudgetProgress(
-            id: row['id'] as int,
-            name: row['name'] as String,
-            category: row['category'] as String,
-            limitAmount: row['limit_amount'] as int,
-            spentAmount: row['spent_amount'] as int,
-            periodStart: DateTime.parse(row['period_start'] as String),
-            periodEnd: DateTime.parse(row['period_end'] as String),
-          ),
+          (row) {
+            final categories = _decodeBudgetCategories(row['category'] as String);
+            final start = DateTime.parse(row['period_start'] as String);
+            final end = DateTime.parse(row['period_end'] as String);
+            final spent = expenseTransactions
+                .where((item) =>
+                    categories.contains(item.category) &&
+                    !item.occurredAt.isBefore(start) &&
+                    !item.occurredAt.isAfter(end))
+                .fold<int>(0, (total, item) => total + item.amount);
+            return BudgetProgress(
+              id: row['id'] as int,
+              name: row['name'] as String,
+              categories: categories,
+              limitAmount: row['limit_amount'] as int,
+              spentAmount: spent,
+              periodStart: start,
+              periodEnd: end,
+            );
+          },
         )
         .toList();
+  }
+
+  static List<String> _decodeBudgetCategories(String stored) {
+    try {
+      final decoded = jsonDecode(stored);
+      if (decoded is List) {
+        return decoded.map((value) => value.toString()).toList();
+      }
+    } catch (_) {
+      // Older app versions stored one plain category name.
+    }
+    return [stored];
   }
 
   Future<int> saveBudget({
     int? id,
     required String name,
-    required String category,
+    required List<String> categories,
     required int limitAmount,
     required DateTime periodStart,
     required DateTime periodEnd,
   }) async {
     final values = <String, Object?>{
       'name': name.trim(),
-      'category': category,
+      'category': jsonEncode(categories),
       'limit_amount': limitAmount,
       'period_start': periodStart.toIso8601String(),
       'period_end': periodEnd.toIso8601String(),

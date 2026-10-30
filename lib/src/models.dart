@@ -8,6 +8,7 @@ class MoneyCategory {
     required this.colorValue,
     required this.iconCodePoint,
     required this.sortOrder,
+    this.parentId,
     this.totalAmount = 0,
   });
 
@@ -17,7 +18,10 @@ class MoneyCategory {
   final int colorValue;
   final int iconCodePoint;
   final int sortOrder;
+  final int? parentId;
   final int totalAmount;
+
+  bool get isMainCategory => parentId == null;
 }
 
 class MoneyAccount {
@@ -112,7 +116,7 @@ class BudgetProgress {
   const BudgetProgress({
     required this.id,
     required this.name,
-    required this.category,
+    required this.categories,
     required this.limitAmount,
     required this.spentAmount,
     required this.periodStart,
@@ -121,7 +125,8 @@ class BudgetProgress {
 
   final int id;
   final String name;
-  final String category;
+  final List<String> categories;
+  String get category => categories.join(', ');
   final int limitAmount;
   final int spentAmount;
   final DateTime periodStart;

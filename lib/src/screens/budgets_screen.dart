@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/local_database.dart';
 import '../models.dart';
@@ -271,15 +272,8 @@ class _BudgetFormState extends State<_BudgetForm> {
   final key = GlobalKey<FormState>();
   late final TextEditingController name;
   late final TextEditingController amount;
-  late String category;
-  List<String> categories = [
-    'စားသောက်စရိတ်',
-    'သယ်ယူပို့ဆောင်ရေး',
-    'အိမ်အသုံးစရိတ်',
-    'ဖုန်းနှင့်အင်တာနက်',
-    'ကျန်းမာရေး',
-    'အခြား',
-  ];
+  List<MoneyCategory> categories = const [];
+  late Set<String> selectedCategories;
 
   @override
   void initState() {
@@ -288,7 +282,7 @@ class _BudgetFormState extends State<_BudgetForm> {
     amount = TextEditingController(
       text: widget.budget?.limitAmount.toString() ?? '',
     );
-    category = widget.budget?.category ?? categories.first;
+    selectedCategories = widget.budget?.categories.toSet() ?? <String>{};
     _loadCategories();
   }
 
@@ -296,8 +290,10 @@ class _BudgetFormState extends State<_BudgetForm> {
     final values = await widget.database.categories(TransactionType.expense);
     if (!mounted) return;
     setState(() {
-      categories = values.map((item) => item.name).toList();
-      if (!categories.contains(category) && categories.isNotEmpty) category = categories.first;
+      categories = values;
+      selectedCategories.removeWhere(
+        (name) => !categories.any((item) => item.name == name),
+      );
     });
   }
 
@@ -310,6 +306,12 @@ class _BudgetFormState extends State<_BudgetForm> {
 
   Future<void> save() async {
     if (!key.currentState!.validate()) return;
+    if (selectedCategories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: LText('အနည်းဆုံး အမျိုးအစားတစ်ခု ရွေးပါ')),
+      );
+      return;
+    }
     final now = DateTime.now();
     final start = DateTime(now.year, now.month);
     final end = DateTime(
@@ -319,7 +321,7 @@ class _BudgetFormState extends State<_BudgetForm> {
     await widget.database.saveBudget(
       id: widget.budget?.id,
       name: name.text,
-      category: category,
+      categories: selectedCategories.toList(),
       limitAmount: int.parse(amount.text.replaceAll(',', '')),
       periodStart: widget.budget?.periodStart ?? start,
       periodEnd: widget.budget?.periodEnd ?? end,
@@ -353,16 +355,36 @@ class _BudgetFormState extends State<_BudgetForm> {
                   (value ?? '').trim().isEmpty ? 'အမည်ထည့်ပါ' : null,
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: categories.contains(category) ? category : categories.last,
-              decoration: InputDecoration(labelText: context.tr('အမျိုးအစား')),
-              items: categories
-                  .map(
-                    (value) =>
-                        DropdownMenuItem(value: value, child: LText(value)),
-                  )
-                  .toList(),
-              onChanged: (value) => setState(() => category = value!),
+            InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: categories.isEmpty
+                  ? null
+                  : () async {
+                      final result = await Navigator.push<Set<String>>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => _BudgetCategoryPicker(
+                            categories: categories,
+                            selected: selectedCategories,
+                          ),
+                        ),
+                      );
+                      if (result != null) {
+                        setState(() => selectedCategories = result);
+                      }
+                    },
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: context.tr('အမျိုးအစားများ'),
+                  prefixIcon: const Icon(Icons.checklist),
+                  suffixIcon: const Icon(Icons.chevron_right),
+                ),
+                child: LText(
+                  selectedCategories.isEmpty
+                      ? 'အမျိုးအစားများ ရွေးပါ'
+                      : '${selectedCategories.length} ခု ရွေးထားသည်',
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -390,6 +412,182 @@ class _BudgetFormState extends State<_BudgetForm> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _BudgetCategoryPicker extends StatefulWidget {
+  const _BudgetCategoryPicker({
+    required this.categories,
+    required this.selected,
+  });
+
+  final List<MoneyCategory> categories;
+  final Set<String> selected;
+
+  @override
+  State<_BudgetCategoryPicker> createState() => _BudgetCategoryPickerState();
+}
+
+class _BudgetCategoryPickerState extends State<_BudgetCategoryPicker> {
+  final search = TextEditingController();
+  late Set<String> selected;
+
+  @override
+  void initState() {
+    super.initState();
+    selected = {...widget.selected};
+  }
+
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
+  List<MoneyCategory> childrenOf(int parentId) => widget.categories
+      .where((item) => item.parentId == parentId)
+      .toList();
+
+  void toggleMain(MoneyCategory main, bool checked) {
+    final names = [main.name, ...childrenOf(main.id).map((item) => item.name)];
+    setState(() {
+      if (checked) {
+        selected.addAll(names);
+      } else {
+        selected.removeAll(names);
+      }
+    });
+  }
+
+  bool? mainValue(MoneyCategory main) {
+    final names = [main.name, ...childrenOf(main.id).map((item) => item.name)];
+    final count = names.where(selected.contains).length;
+    if (count == 0) return false;
+    if (count == names.length) return true;
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = search.text.trim().toLowerCase();
+    final mains = widget.categories.where((item) => item.parentId == null);
+    final visibleMains = mains.where((main) {
+      if (query.isEmpty || main.name.toLowerCase().contains(query)) return true;
+      return childrenOf(main.id)
+          .any((child) => child.name.toLowerCase().contains(query));
+    }).toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const LText('အမျိုးအစားများ ရွေးပါ'),
+        actions: [
+          IconButton(
+            tooltip: context.tr('သိမ်းမည်'),
+            onPressed: () => Navigator.pop(context, selected),
+            icon: const Icon(Icons.check),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              controller: search,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: context.tr('အမျိုးအစားရှာရန်'),
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: search.text.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: () {
+                          search.clear();
+                          setState(() {});
+                        },
+                        icon: const Icon(Icons.clear),
+                      ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: LText(
+                    '${selected.length} ခု ရွေးထားသည်',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => selected.clear()),
+                  child: const LText('အားလုံးဖြုတ်မည်'),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: visibleMains.length,
+              itemBuilder: (context, index) {
+                final main = visibleMains[index];
+                final children = childrenOf(main.id)
+                    .where((child) => query.isEmpty ||
+                        main.name.toLowerCase().contains(query) ||
+                        child.name.toLowerCase().contains(query))
+                    .toList();
+                final color = Color(main.colorValue);
+                return Card(
+                  margin: const EdgeInsets.fromLTRB(12, 5, 12, 5),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      CheckboxListTile(
+                        tristate: true,
+                        value: mainValue(main),
+                        onChanged: (_) =>
+                            toggleMain(main, mainValue(main) != true),
+                        secondary: Icon(
+                          IconData(main.iconCodePoint, fontFamily: 'MaterialIcons'),
+                          color: color,
+                        ),
+                        title: LText(
+                          main.name,
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        subtitle: LText('${childrenOf(main.id).length} ${context.tr('အမျိုးအစားခွဲ')}'),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                      for (final child in children) ...[
+                        const Divider(height: 1, indent: 56),
+                        CheckboxListTile(
+                          value: selected.contains(child.name),
+                          onChanged: (checked) => setState(() {
+                            if (checked == true) {
+                              selected.add(child.name);
+                            } else {
+                              selected.remove(child.name);
+                            }
+                          }),
+                          secondary: Icon(
+                            IconData(child.iconCodePoint, fontFamily: 'MaterialIcons'),
+                            color: Color(child.colorValue),
+                          ),
+                          title: LText(child.name),
+                          contentPadding: const EdgeInsets.only(left: 32, right: 12),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

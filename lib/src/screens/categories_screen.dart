@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/local_database.dart';
 import '../models.dart';
@@ -36,11 +37,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     if (mounted) setState(() { items = values; loading = false; });
   }
 
-  Future<void> _edit([MoneyCategory? item]) async {
+  Future<void> _edit([MoneyCategory? item, int? parentId]) async {
     final changed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _CategoryEditor(database: widget.database, type: type, item: item),
+      builder: (_) => _CategoryEditor(
+        database: widget.database,
+        type: type,
+        item: item,
+        categories: items,
+        initialParentId: parentId,
+      ),
     );
     if (changed == true) _load();
   }
@@ -70,6 +77,18 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   Widget build(BuildContext context) {
     final query = search.text.trim().toLowerCase();
     final shown = items.where((item) => item.name.toLowerCase().contains(query)).toList();
+    final mains = shown.where((item) => item.parentId == null).toList();
+    final matchedParentIds = shown
+        .where((item) => item.parentId != null)
+        .map((item) => item.parentId!)
+        .toSet();
+    final visibleMains = query.isEmpty
+        ? mains
+        : items
+            .where((item) =>
+                item.parentId == null &&
+                (shown.contains(item) || matchedParentIds.contains(item.id)))
+            .toList();
     return Scaffold(
       appBar: AppBar(title: const LText('အမျိုးအစားများ')),
       floatingActionButton: FloatingActionButton.extended(
@@ -103,40 +122,81 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         ),
         const Padding(
           padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
-          child: Align(alignment: Alignment.centerLeft, child: LText('အစီအစဉ်အလိုက် အမျိုးအစားများ', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800))),
+          child: Align(alignment: Alignment.centerLeft, child: LText('အဓိကအမျိုးအစား', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800))),
         ),
         Expanded(
           child: loading
               ? const Center(child: CircularProgressIndicator())
-              : shown.isEmpty
+              : visibleMains.isEmpty
                   ? const Center(child: LText('အမျိုးအစား မရှိသေးပါ'))
-                  : ReorderableListView.builder(
+                  : ListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                      itemCount: shown.length,
-                      onReorder: query.isNotEmpty ? (_, __) {} : (oldIndex, newIndex) async {
-                        if (newIndex > oldIndex) newIndex--;
-                        final moved = items.removeAt(oldIndex);
-                        items.insert(newIndex, moved);
-                        setState(() {});
-                        await widget.database.reorderCategories(type, items.map((e) => e.id).toList());
-                      },
+                      itemCount: visibleMains.length,
                       itemBuilder: (context, index) {
-                        final item = shown[index];
+                        final item = visibleMains[index];
                         final color = Color(item.colorValue);
+                        final children = items
+                            .where((child) =>
+                                child.parentId == item.id &&
+                                (query.isEmpty || child.name.toLowerCase().contains(query)))
+                            .toList();
                         return Card(
                           key: ValueKey(item.id),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: color.withValues(alpha: .14),
-                              child: Icon(IconData(item.iconCodePoint, fontFamily: 'MaterialIcons'), color: color),
-                            ),
-                            title: LText(item.name, style: const TextStyle(fontWeight: FontWeight.w800)),
-                            subtitle: LText(context.money(item.totalAmount)),
-                            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                              IconButton(onPressed: () => _edit(item), icon: const Icon(Icons.edit_outlined)),
-                              IconButton(onPressed: () => _delete(item), icon: const Icon(Icons.delete_outline)),
-                              const Icon(Icons.drag_indicator),
-                            ]),
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
+                            children: [
+                              ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: color.withValues(alpha: .14),
+                                  child: Icon(IconData(item.iconCodePoint, fontFamily: 'MaterialIcons'), color: color),
+                                ),
+                                title: LText(item.name, style: const TextStyle(fontWeight: FontWeight.w900)),
+                                subtitle: LText('${children.length} ${context.tr('အမျိုးအစားခွဲ')} • ${context.money(item.totalAmount)}'),
+                                trailing: PopupMenuButton<String>(
+                                  onSelected: (value) {
+                                    if (value == 'add') _edit(null, item.id);
+                                    if (value == 'edit') _edit(item);
+                                    if (value == 'delete') _delete(item);
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(value: 'add', child: LText('အမျိုးအစားခွဲအသစ်')),
+                                    PopupMenuItem(value: 'edit', child: LText('ပြင်မည်')),
+                                    PopupMenuItem(value: 'delete', child: LText('ဖျက်မည်')),
+                                  ],
+                                ),
+                              ),
+                              if (children.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: TextButton.icon(
+                                      onPressed: () => _edit(null, item.id),
+                                      icon: const Icon(Icons.add, size: 18),
+                                      label: const LText('အမျိုးအစားခွဲအသစ်'),
+                                    ),
+                                  ),
+                                ),
+                              for (final child in children) ...[
+                                const Divider(height: 1, indent: 72),
+                                ListTile(
+                                  contentPadding: const EdgeInsets.only(left: 72, right: 8),
+                                  leading: Icon(
+                                    IconData(child.iconCodePoint, fontFamily: 'MaterialIcons'),
+                                    color: Color(child.colorValue),
+                                  ),
+                                  title: LText(child.name),
+                                  subtitle: LText(context.money(child.totalAmount)),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(onPressed: () => _edit(child), icon: const Icon(Icons.edit_outlined)),
+                                      IconButton(onPressed: () => _delete(child), icon: const Icon(Icons.delete_outline)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         );
                       },
@@ -148,10 +208,18 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 }
 
 class _CategoryEditor extends StatefulWidget {
-  const _CategoryEditor({required this.database, required this.type, this.item});
+  const _CategoryEditor({
+    required this.database,
+    required this.type,
+    required this.categories,
+    this.item,
+    this.initialParentId,
+  });
   final LocalDatabase database;
   final TransactionType type;
+  final List<MoneyCategory> categories;
   final MoneyCategory? item;
+  final int? initialParentId;
 
   @override
   State<_CategoryEditor> createState() => _CategoryEditorState();
@@ -161,6 +229,8 @@ class _CategoryEditorState extends State<_CategoryEditor> {
   late final TextEditingController name;
   late int colorValue;
   late int iconCodePoint;
+  late bool isSubcategory;
+  int? parentId;
   String iconGroup = 'အားလုံး';
   static const colors = [0xFF10B981, 0xFFFF5B55, 0xFFF5B82E, 0xFF2196F3, 0xFF12B8B0, 0xFF7C4DFF, 0xFF607D8B];
   static const iconGroups = <String, List<IconData>>{
@@ -220,6 +290,8 @@ class _CategoryEditorState extends State<_CategoryEditor> {
     name = TextEditingController(text: widget.item?.name ?? '');
     colorValue = widget.item?.colorValue ?? colors.first;
     iconCodePoint = widget.item?.iconCodePoint ?? icons.first.codePoint;
+    parentId = widget.item?.parentId ?? widget.initialParentId;
+    isSubcategory = parentId != null;
   }
 
   @override
@@ -227,12 +299,19 @@ class _CategoryEditorState extends State<_CategoryEditor> {
 
   Future<void> _save() async {
     if (name.text.trim().isEmpty) return;
+    if (isSubcategory && parentId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: LText('မိခင်အမျိုးအစား ရွေးပါ')),
+      );
+      return;
+    }
     await widget.database.saveCategory(
       id: widget.item?.id,
       name: name.text,
       type: widget.type,
       colorValue: colorValue,
       iconCodePoint: iconCodePoint,
+      parentId: isSubcategory ? parentId : null,
     );
     if (mounted) Navigator.pop(context, true);
   }
@@ -274,6 +353,45 @@ class _CategoryEditorState extends State<_CategoryEditor> {
                 labelText: context.tr('အမျိုးအစားအမည်'),
               ),
             ),
+            const SizedBox(height: 14),
+            const LText('အမျိုးအစားအဆင့်'),
+            const SizedBox(height: 6),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: LText('အဓိကအမျိုးအစား')),
+                ButtonSegment(value: true, label: LText('အမျိုးအစားခွဲ')),
+              ],
+              selected: {isSubcategory},
+              onSelectionChanged: (value) => setState(() {
+                isSubcategory = value.first;
+                if (isSubcategory && parentId == null) {
+                  final available = widget.categories.where((item) =>
+                      item.parentId == null && item.id != widget.item?.id);
+                  parentId = available.isEmpty ? null : available.first.id;
+                }
+              }),
+            ),
+            if (isSubcategory) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                value: widget.categories.any((item) => item.id == parentId)
+                    ? parentId
+                    : null,
+                decoration: InputDecoration(
+                  labelText: context.tr('မိခင်အမျိုးအစား'),
+                  prefixIcon: const Icon(Icons.account_tree_outlined),
+                ),
+                items: widget.categories
+                    .where((item) =>
+                        item.parentId == null && item.id != widget.item?.id)
+                    .map((item) => DropdownMenuItem(
+                          value: item.id,
+                          child: LText(item.name),
+                        ))
+                    .toList(),
+                onChanged: (value) => setState(() => parentId = value),
+              ),
+            ],
             const SizedBox(height: 14),
             const LText('အရောင်ရွေးပါ'),
             const SizedBox(height: 6),
