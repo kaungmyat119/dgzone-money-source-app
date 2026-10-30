@@ -151,11 +151,25 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   ]));
 
   Widget _dayCard(DateTime day, List<MoneyTransaction> items) {
-    final total = items.fold<int>(0, (sum, e) => sum + (e.type == TransactionType.income ? e.amount : -e.amount));
+    final total = items.fold<int>(0, (sum, e) => sum + switch (e.type) {
+      TransactionType.income => e.amount,
+      TransactionType.expense => -e.amount,
+      TransactionType.transfer => 0,
+    });
     return Card(margin: const EdgeInsets.fromLTRB(16, 0, 16, 12), child: Column(children: [
       Padding(padding: const EdgeInsets.fromLTRB(16, 14, 12, 10), child: Row(children: [
         Expanded(child: LText(context.appDate(day), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900))),
-        LText('${total >= 0 ? '+' : '−'} ${context.money(total.abs())}', style: TextStyle(fontWeight: FontWeight.w800, color: total >= 0 ? AppColors.emerald : AppColors.coral)), const Icon(Icons.expand_more),
+        LText(
+          '${total > 0 ? '+' : total < 0 ? '−' : ''} ${context.money(total.abs())}',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: total > 0
+                ? AppColors.emerald
+                : total < 0
+                    ? AppColors.coral
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ), const Icon(Icons.expand_more),
       ])), const Divider(height: 1),
       for (var i = 0; i < items.length; i++) ...[_transactionRow(items[i]), if (i != items.length - 1) const Divider(height: 1, indent: 72)],
     ]));
@@ -163,15 +177,29 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
 
   Widget _transactionRow(MoneyTransaction item) {
     final positive = item.type == TransactionType.income;
-    final color = positive ? AppColors.emerald : AppColors.coral;
+    final transfer = item.type == TransactionType.transfer;
+    final color = transfer
+        ? Theme.of(context).colorScheme.primary
+        : positive
+            ? AppColors.emerald
+            : AppColors.coral;
     final category = categoryInfo['${item.type.name}:${item.category}'];
-    final icon = category == null ? (positive ? Icons.payments : Icons.receipt_long) : IconData(category.iconCodePoint, fontFamily: 'MaterialIcons');
-    final iconColor = category == null ? color : Color(category.colorValue);
+    final icon = transfer
+        ? Icons.swap_horiz
+        : category == null
+            ? (positive ? Icons.payments : Icons.receipt_long)
+            : IconData(category.iconCodePoint, fontFamily: 'MaterialIcons');
+    final iconColor = transfer || category == null
+        ? color
+        : Color(category.colorValue);
+    final accountLabel = transfer
+        ? '${accountNames[item.accountId] ?? 'အကောင့်'} → ${accountNames[item.targetAccountId] ?? 'အကောင့်'}'
+        : '${accountNames[item.accountId] ?? 'အကောင့်'} • ${item.category}';
     final imagePath = item.receiptImagePath;
     return InkWell(onTap: () => openForm(item), onLongPress: () => remove(item), child: Padding(padding: const EdgeInsets.fromLTRB(14, 10, 8, 10), child: Row(children: [
       CircleAvatar(radius: 25, backgroundColor: iconColor.withValues(alpha: .14), child: Icon(icon, color: iconColor)), const SizedBox(width: 12),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [LText(item.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)), LText('${accountNames[item.accountId] ?? 'အကောင့်'} • ${item.category}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)), LText(DateFormat('h:mm a').format(item.occurredAt), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))])),
-      LText('${positive ? '+' : '−'} ${context.money(item.amount)}', style: TextStyle(fontWeight: FontWeight.w900, color: color)),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [LText(item.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)), LText(accountLabel, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)), LText(DateFormat('h:mm a').format(item.occurredAt), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))])),
+      LText('${transfer ? '↔' : positive ? '+' : '−'} ${context.money(item.amount)}', style: TextStyle(fontWeight: FontWeight.w900, color: color)),
       if (imagePath != null && File(imagePath).existsSync()) IconButton(onPressed: () => openReceiptImage(context, imagePath), icon: const Icon(Icons.receipt_long_outlined)), const Icon(Icons.chevron_right),
     ])));
   }

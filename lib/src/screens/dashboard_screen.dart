@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/local_database.dart';
 import '../models.dart';
@@ -98,6 +99,19 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _openAccounts(BuildContext context) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AccountsScreen(
+          database: database,
+          onDataChanged: onDataChanged,
+        ),
+      ),
+    );
+    onDataChanged();
+  }
+
   Future<void> _editTransaction(
     BuildContext context,
     MoneyTransaction transaction,
@@ -169,22 +183,6 @@ class DashboardScreen extends StatelessWidget {
               ],
             ),
             actions: [
-              IconButton(
-                tooltip: context.tr('ပုံမှန်စာရင်းနှင့် သတိပေးချက်'),
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => RecurringScreen(
-                        database: database,
-                        onDataChanged: onDataChanged,
-                      ),
-                    ),
-                  );
-                  onDataChanged();
-                },
-                icon: const Icon(Icons.notifications_active_outlined),
-              ),
               PopupMenuButton<AppLanguage>(
                 icon: const Icon(Icons.language),
                 initialValue: language,
@@ -200,48 +198,10 @@ class DashboardScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert),
-                onSelected: (value) {
-                  if (value == 'accounts') {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => AccountsScreen(
-                          database: database,
-                          onDataChanged: onDataChanged,
-                        ),
-                      ),
-                    );
-                  } else if (value == 'budgets') {
-                    _openBudgets(context);
-                  } else if (value == 'settings') {
-                    _openSettings(context);
-                  }
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'accounts',
-                    child: ListTile(
-                      leading: Icon(Icons.account_balance_wallet_outlined),
-                      title: LText('အကောင့်များ'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'budgets',
-                    child: ListTile(
-                      leading: Icon(Icons.donut_large),
-                      title: LText('ဘတ်ဂျက်'),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'settings',
-                    child: ListTile(
-                      leading: Icon(Icons.settings_outlined),
-                      title: LText('ဆက်တင်'),
-                    ),
-                  ),
-                ],
+              IconButton(
+                tooltip: context.tr('ဆက်တင်'),
+                onPressed: () => _openSettings(context),
+                icon: const Icon(Icons.settings_outlined),
               ),
             ],
           ),
@@ -283,60 +243,73 @@ class DashboardScreen extends StatelessWidget {
               ),
             ],
           ),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: 0,
-            onDestinationSelected: (index) {
-              if (index == 1) {
-                _openTransactions(context);
-              } else if (index == 2) {
-                _openTransactionForm(context);
-              } else if (index == 3) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ReportsScreen(database: database),
-                  ),
-                );
-              } else if (index == 4) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => RecurringScreen(
-                      database: database,
-                      onDataChanged: onDataChanged,
-                    ),
-                  ),
-                );
-              }
-            },
-            destinations: [
-              NavigationDestination(
-                icon: const Icon(Icons.home_outlined),
-                selectedIcon: const Icon(Icons.home),
-                label: strings.get('home'),
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.receipt_long_outlined),
-                label: strings.get('transactions'),
-              ),
-              const NavigationDestination(
-                icon: Icon(
-                  Icons.add_circle,
-                  size: 38,
-                  color: AppColors.emerald,
+          bottomNavigationBar: NavigationBarTheme(
+            data: NavigationBarThemeData(
+              height: 72,
+              labelTextStyle: WidgetStateProperty.resolveWith(
+                (states) => TextStyle(
+                  fontSize: 10,
+                  height: 1.05,
+                  fontWeight: states.contains(WidgetState.selected)
+                      ? FontWeight.w700
+                      : FontWeight.w500,
                 ),
-                label: '',
               ),
-              NavigationDestination(
-                icon: const Icon(Icons.bar_chart),
-                label: strings.get('reports'),
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.event_repeat_outlined),
-                selectedIcon: const Icon(Icons.event_repeat),
-                label: context.tr('ပုံမှန်စာရင်း'),
-              ),
-            ],
+            ),
+            child: NavigationBar(
+              selectedIndex: 0,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              onDestinationSelected: (index) {
+                if (index == 1) {
+                  _openTransactions(context);
+                } else if (index == 2) {
+                  _openAccounts(context);
+                } else if (index == 3) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ReportsScreen(database: database),
+                    ),
+                  );
+                } else if (index == 4) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => RecurringScreen(
+                        database: database,
+                        onDataChanged: onDataChanged,
+                      ),
+                    ),
+                  );
+                }
+              },
+              destinations: [
+                NavigationDestination(
+                  icon: const Icon(Icons.home_outlined),
+                  selectedIcon: const Icon(Icons.home),
+                  label: strings.get('home'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: strings.get('transactions'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.account_balance_wallet_outlined),
+                  label: context.tr('အကောင့်များ'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.bar_chart),
+                  label: strings.get('reports'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.event_repeat_outlined),
+                  selectedIcon: const Icon(Icons.event_repeat),
+                  label: language == AppLanguage.english
+                      ? 'Recurring'
+                      : 'ပုံမှန်',
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -670,7 +643,10 @@ class _TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final income = transaction.type == TransactionType.income;
-    final color = transaction.categoryColorValue == null
+    final transfer = transaction.type == TransactionType.transfer;
+    final color = transfer
+        ? Theme.of(context).colorScheme.primary
+        : transaction.categoryColorValue == null
         ? (income ? AppColors.emerald : AppColors.coral)
         : Color(transaction.categoryColorValue!);
     final icon = transaction.type == TransactionType.transfer
@@ -694,7 +670,7 @@ class _TransactionTile extends StatelessWidget {
       ),
       subtitle: LText(transaction.category),
       trailing: LText(
-        '${income ? '+' : '−'} ${context.money(transaction.amount)}',
+        '${transfer ? '↔' : income ? '+' : '−'} ${context.money(transaction.amount)}',
         style: TextStyle(fontWeight: FontWeight.w800, color: color),
       ),
     );
