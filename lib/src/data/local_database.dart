@@ -16,7 +16,7 @@ class LocalDatabase {
     final root = await getDatabasesPath();
     _database = await openDatabase(
       p.join(root, 'dgzone_money.db'),
-      version: 12,
+      version: 13,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) async {
         await db.execute('''
@@ -61,6 +61,7 @@ class LocalDatabase {
         await _createSettingsTable(db);
         await _createTemplatesTable(db);
         await _createCategoriesTable(db);
+        await _seedBuiltInData(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -105,6 +106,7 @@ class LocalDatabase {
             'ALTER TABLE money_categories ADD COLUMN parent_id INTEGER',
           );
         }
+        if (oldVersion < 13) await _seedBuiltInData(db);
       },
     );
   }
@@ -217,40 +219,115 @@ class LocalDatabase {
         UNIQUE(name, type)
       )
     ''');
-    final count = Sqflite.firstIntValue(
-          await db.rawQuery('SELECT COUNT(*) FROM money_categories'),
+  }
+
+  static Future<void> _seedBuiltInData(DatabaseExecutor db) async {
+    final now = DateTime.now().toIso8601String();
+    final accountCount = Sqflite.firstIntValue(
+          await db.rawQuery('SELECT COUNT(*) FROM accounts'),
         ) ??
         0;
-    if (count > 0) return;
-    const expense = [
-      ['စားသောက်စရိတ်', 0xFF10B981, 0xe25a],
-      ['သယ်ယူပို့ဆောင်ရေး', 0xFFFF5B55, 0xe1d7],
-      ['အိမ်အသုံးစရိတ်', 0xFFF5B82E, 0xe318],
-      ['ဖုန်းနှင့်အင်တာနက်', 0xFF2196F3, 0xe0cd],
-      ['ကျန်းမာရေး', 0xFF12B8B0, 0xe3f3],
-      ['အခြား', 0xFF7C4DFF, 0xe5d3],
-    ];
-    const income = [
-      ['လစာ', 0xFF079455, 0xe263],
-      ['စီးပွားရေး', 0xFF2196F3, 0xe8f9],
-      ['အပိုဝင်ငွေ', 0xFFF5B82E, 0xe8f6],
-      ['အခြား', 0xFF7C4DFF, 0xe5d3],
-    ];
-    var order = 0;
-    for (final row in expense) {
-      await db.insert('money_categories', {
-        'name': row[0], 'type': 'expense', 'color_value': row[1],
-        'icon_code_point': row[2], 'sort_order': order++,
-        'created_at': DateTime.now().toIso8601String(),
+    if (accountCount == 0) {
+      await db.insert('accounts', {
+        'name': 'လက်ရှိအကောင့်',
+        'type': 'cash',
+        'opening_balance': 0,
+        'sort_order': 0,
+        'created_at': now,
       });
     }
-    order = 0;
-    for (final row in income) {
-      await db.insert('money_categories', {
-        'name': row[0], 'type': 'income', 'color_value': row[1],
-        'icon_code_point': row[2], 'sort_order': order++,
-        'created_at': DateTime.now().toIso8601String(),
-      });
+
+    const groups = <Map<String, Object>>[
+      {
+        'name': 'ကား', 'type': 'expense', 'color': 0xFFFF5B55,
+        'icon': 0xe1d7,
+        'children': ['ကားအပိုပစ္စည်းများ', 'ကားပြုပြင်ခြင်း', 'ကားဆေးခြင်း', 'ကားအာမခံ', 'လမ်းအသုံးပြုခ', 'ဆီဖြည့်ခြင်း', 'ကားဝန်ဆောင်မှု', 'ကားအခွန်များ', 'တာယာများ'],
+      },
+      {
+        'name': 'အဝတ်အစား', 'type': 'expense', 'color': 0xFF7C4DFF,
+        'icon': 0xe8f6,
+        'children': ['ဂျာကင်အင်္ကျီ', 'လက်ဝတ်ရတနာ', 'ဘောင်းဘီ', 'ရှပ်အင်္ကျီ', 'ဖိနပ်', 'ဆွယ်တာ', 'တီရှပ်', 'အတွင်းခံ'],
+      },
+      {
+        'name': 'ပညာရေး', 'type': 'expense', 'color': 0xFF2196F3,
+        'icon': 0xe80c,
+        'children': ['စာသင်နှစ်ကြေး', 'ဆွေးနွေးပွဲများ', 'အထူးပြုစာအုပ်များ', 'ခရီးစရိတ်', 'ကျူရှင်'],
+      },
+      {
+        'name': 'အီလက်ထရွန်နစ်', 'type': 'expense', 'color': 0xFF12B8B0,
+        'icon': 0xe0cd,
+        'children': ['အီလက်ထရွန်နစ်အပိုပစ္စည်းများ', 'ဘလူးရေး', 'ကင်မရာ', 'ကွန်ပျူတာ', 'ဒီဗီဒီ', 'မော်နီတာများ', 'လက်ပ်တော့', 'ပရင်တာများ', 'စမတ်ဖုန်းများ', 'ရုပ်မြင်သံကြား'],
+      },
+      {
+        'name': 'အားလပ်ချိန်', 'type': 'expense', 'color': 0xFFF5B82E,
+        'icon': 0xe40f,
+        'children': ['အပန်းဖြေဥယျာဉ်', 'စာအုပ်များ', 'ရုပ်ရှင်ရုံ', 'ဖျော်ဖြေပွဲ', 'ဒစ္စကို', 'ပွဲလမ်းသဘင်များ', 'ဂိမ်းများ', 'အားလပ်ရက်များ', 'ပြတိုက်', 'အရက်ဆိုင်များ', 'စားသောက်ဆိုင်', 'အားကစားကလပ်', 'ရေကူး', 'ပြဇာတ်ရုံ'],
+      },
+      {
+        'name': 'အိမ်', 'type': 'expense', 'color': 0xFFF5B82E,
+        'icon': 0xe318,
+        'children': ['အပိုကုန်ကျစရိတ်', 'အကြွေး', 'လျှပ်စစ်မီတာ', 'ပရိဘောဂ', 'ဥယျာဉ်', 'ဓာတ်ငွေ့', 'ကုန်စုံပစ္စည်း', 'အိမ်အာမခံများ', 'အင်တာနက်', 'အိမ်မွေးတိရစ္ဆာန်', 'ဖုန်း', 'အိမ်ပြင်ဆင်ခြင်း', 'အိမ်လခ', 'အိမ်ပြုပြင်ခြင်း', 'အိမ်သုံးရုပ်မြင်သံကြား'],
+      },
+      {
+        'name': 'ကလေးများ', 'type': 'expense', 'color': 0xFF10B981,
+        'icon': 0xeb41,
+        'children': ['ကလေးအဝတ်အစား', 'မုန့်ဖိုး', 'ကျောင်း', 'ကျောင်းလေ့လာရေးခရီး', 'ကစားစရာများ'],
+      },
+      {
+        'name': 'အခြား', 'type': 'expense', 'color': 0xFF607D8B,
+        'icon': 0xe5d3,
+        'children': ['ဘတ်စ်ကား', 'ထည့်ဝင်ကြေးများ', 'အလှကုန်', 'ဆံပင်ညှပ်', 'အထွေထွေအာမခံများ', 'ဂျာနယ်များ', 'ဆေးဝါး', 'ကားပါကင်', 'တက္ကစီ', 'ရထား'],
+      },
+      {
+        'name': 'ဝင်ငွေ', 'type': 'income', 'color': 0xFF079455,
+        'icon': 0xe263,
+        'children': ['ကလေးထောက်ပံ့ကြေး', 'အစုရှယ်ယာအမြတ်', 'အလှူငွေရရှိမှု', 'အတိုးရငွေ', 'ပင်စင်', 'လစာ', 'အပိုအလုပ်', 'အခွန်ပြန်အမ်းငွေ', 'အလုပ်လက်မဲ့ထောက်ပံ့ကြေး'],
+      },
+    ];
+
+    for (var groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+      final group = groups[groupIndex];
+      final name = group['name']! as String;
+      final type = group['type']! as String;
+      final color = group['color']! as int;
+      final icon = group['icon']! as int;
+      await db.insert(
+        'money_categories',
+        {
+          'name': name, 'type': type, 'color_value': color,
+          'icon_code_point': icon, 'sort_order': groupIndex,
+          'parent_id': null, 'created_at': now,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+      final parentRows = await db.query(
+        'money_categories',
+        columns: ['id'],
+        where: 'name=? AND type=?',
+        whereArgs: [name, type],
+        limit: 1,
+      );
+      if (parentRows.isEmpty) continue;
+      final parentId = parentRows.first['id'] as int;
+      final children = group['children']! as List<String>;
+      for (var childIndex = 0; childIndex < children.length; childIndex++) {
+        final childName = children[childIndex];
+        await db.insert(
+          'money_categories',
+          {
+            'name': childName, 'type': type, 'color_value': color,
+            'icon_code_point': icon, 'sort_order': childIndex,
+            'parent_id': parentId, 'created_at': now,
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+        await db.update(
+          'money_categories',
+          {'parent_id': parentId},
+          where: 'name=? AND type=? AND (parent_id IS NULL OR parent_id=?)',
+          whereArgs: [childName, type, parentId],
+        );
+      }
     }
   }
 
@@ -384,9 +461,7 @@ class LocalDatabase {
     });
   }
 
-  /// New installations intentionally start without accounts or transactions.
-  /// The onboarding flow guides the user to create the first real account.
-  Future<void> seedIfEmpty() async {}
+  Future<void> seedIfEmpty() => _seedBuiltInData(db);
 
   Future<DashboardSnapshot> dashboard() async {
     final summary = (await db.rawQuery('''
@@ -941,9 +1016,10 @@ class LocalDatabase {
       await txn.delete('transaction_templates');
       await txn.delete('accounts');
       await txn.insert('accounts', {
-        'name': 'လက်ငင်းငွေ',
+        'name': 'လက်ရှိအကောင့်',
         'type': 'cash',
         'opening_balance': 0,
+        'sort_order': 0,
         'created_at': now,
       });
     });

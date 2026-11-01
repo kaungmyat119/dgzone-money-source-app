@@ -76,7 +76,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   @override
   Widget build(BuildContext context) {
     final query = search.text.trim().toLowerCase();
-    final shown = items.where((item) => item.name.toLowerCase().contains(query)).toList();
+    final shown = items.where((item) =>
+        item.name.toLowerCase().contains(query) ||
+        context.tr(item.name).toLowerCase().contains(query)).toList();
     final mains = shown.where((item) => item.parentId == null).toList();
     final matchedParentIds = shown
         .where((item) => item.parentId != null)
@@ -138,7 +140,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                         final children = items
                             .where((child) =>
                                 child.parentId == item.id &&
-                                (query.isEmpty || child.name.toLowerCase().contains(query)))
+                                (query.isEmpty ||
+                                    child.name.toLowerCase().contains(query) ||
+                                    context.tr(child.name).toLowerCase().contains(query)))
                             .toList();
                         return Card(
                           key: ValueKey(item.id),

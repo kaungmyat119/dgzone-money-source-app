@@ -474,9 +474,13 @@ class _BudgetCategoryPickerState extends State<_BudgetCategoryPicker> {
     final query = search.text.trim().toLowerCase();
     final mains = widget.categories.where((item) => item.parentId == null);
     final visibleMains = mains.where((main) {
-      if (query.isEmpty || main.name.toLowerCase().contains(query)) return true;
+      if (query.isEmpty ||
+          main.name.toLowerCase().contains(query) ||
+          context.tr(main.name).toLowerCase().contains(query)) return true;
       return childrenOf(main.id)
-          .any((child) => child.name.toLowerCase().contains(query));
+          .any((child) =>
+              child.name.toLowerCase().contains(query) ||
+              context.tr(child.name).toLowerCase().contains(query));
     }).toList();
 
     return Scaffold(
@@ -537,7 +541,9 @@ class _BudgetCategoryPickerState extends State<_BudgetCategoryPicker> {
                 final children = childrenOf(main.id)
                     .where((child) => query.isEmpty ||
                         main.name.toLowerCase().contains(query) ||
-                        child.name.toLowerCase().contains(query))
+                        context.tr(main.name).toLowerCase().contains(query) ||
+                        child.name.toLowerCase().contains(query) ||
+                        context.tr(child.name).toLowerCase().contains(query))
                     .toList();
                 final color = Color(main.colorValue);
                 return Card(
