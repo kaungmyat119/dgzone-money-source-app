@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/local_database.dart';
 import '../models.dart';
@@ -267,9 +268,49 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
     'အခြား',
   ];
   List<String> incomeCategories = ['လစာ', 'စီးပွားရေး', 'အပိုဝင်ငွေ', 'အခြား'];
+  List<MoneyCategory> categoryItems = const [];
+  int? selectedMainCategoryId;
 
   List<String> get categories =>
       type == TransactionType.income ? incomeCategories : expenseCategories;
+
+  List<MoneyCategory> get mainCategories => categoryItems
+      .where((item) => item.type == type && item.parentId == null)
+      .toList();
+
+  List<MoneyCategory> get subcategories => categoryItems
+      .where((item) => item.type == type && item.parentId == selectedMainCategoryId)
+      .toList();
+
+  void _syncCategorySelection() {
+    MoneyCategory? selected;
+    for (final item in categoryItems) {
+      if (item.type == type && item.name == category) {
+        selected = item;
+        break;
+      }
+    }
+    if (selected != null) {
+      selectedMainCategoryId = selected.parentId ?? selected.id;
+      if (selected.parentId == null) {
+        final children = subcategories;
+        if (children.isNotEmpty) category = children.first.name;
+      }
+      return;
+    }
+    final mains = mainCategories;
+    if (mains.isEmpty) return;
+    selectedMainCategoryId = mains.first.id;
+    final children = subcategories;
+    category = children.isEmpty ? mains.first.name : children.first.name;
+  }
+
+  void _selectMainCategory(int id) {
+    selectedMainCategoryId = id;
+    final main = mainCategories.firstWhere((item) => item.id == id);
+    final children = subcategories;
+    category = children.isEmpty ? main.name : children.first.name;
+  }
 
   @override
   void initState() {
@@ -295,9 +336,14 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
     ]);
     if (!mounted) return;
     setState(() {
+      categoryItems = [
+        ...(result[0] as List<MoneyCategory>),
+        ...(result[1] as List<MoneyCategory>),
+      ];
       expenseCategories = result[0].map((item) => item.name).toList();
       incomeCategories = result[1].map((item) => item.name).toList();
       if (!categories.contains(category) && categories.isNotEmpty) category = categories.first;
+      _syncCategorySelection();
     });
   }
 
@@ -381,6 +427,9 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
                     category = type == TransactionType.transfer
                         ? transferCategory
                         : categories.first;
+                    if (type != TransactionType.transfer) {
+                      _syncCategorySelection();
+                    }
                   }),
                 ),
                 const SizedBox(height: 16),
@@ -428,25 +477,46 @@ class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                if (type != TransactionType.transfer) DropdownButtonFormField<String>(
-                  value: categories.contains(category)
-                      ? category
-                      : categories.last,
-                  decoration: InputDecoration(
-                    labelText: context.tr('အမျိုးအစား'),
-                    prefixIcon: Icon(Icons.category_outlined),
+                if (type != TransactionType.transfer && mainCategories.isNotEmpty) ...[
+                  DropdownButtonFormField<int>(
+                    value: mainCategories.any((item) => item.id == selectedMainCategoryId)
+                        ? selectedMainCategoryId
+                        : mainCategories.first.id,
+                    decoration: InputDecoration(
+                      labelText: context.tr('အဓိကအမျိုးအစား'),
+                      prefixIcon: const Icon(Icons.category_outlined),
+                    ),
+                    items: mainCategories
+                        .map((item) => DropdownMenuItem(
+                              value: item.id,
+                              child: LText(item.name),
+                            ))
+                        .toList(),
+                    onChanged: (value) => setState(() {
+                      if (value != null) _selectMainCategory(value);
+                    }),
                   ),
-                  items: categories
-                      .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: LText(value),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) => setState(() => category = value!),
-                ),
-                if (type != TransactionType.transfer) const SizedBox(height: 12),
+                  if (subcategories.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: subcategories.any((item) => item.name == category)
+                          ? category
+                          : subcategories.first.name,
+                      decoration: InputDecoration(
+                        labelText: context.tr('အမျိုးအစားခွဲ'),
+                        prefixIcon: const Icon(Icons.account_tree_outlined),
+                      ),
+                      items: subcategories
+                          .map((item) => DropdownMenuItem(
+                                value: item.name,
+                                child: LText(item.name),
+                              ))
+                          .toList(),
+                      onChanged: (value) => setState(() => category = value!),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                ],
                 DropdownButtonFormField<int>(
                   value: accountId,
                   decoration: InputDecoration(
