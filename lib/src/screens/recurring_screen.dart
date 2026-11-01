@@ -64,7 +64,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
       unawaited(
         NotificationService.instance
             .syncRecurring(widget.database)
-            .catchError((Object error) => debugPrint('DGZ notifications: sync failed: $error')),
+            .catchError((_) {}),
       );
     }
   }
@@ -77,7 +77,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
     unawaited(
       NotificationService.instance
           .syncRecurring(widget.database)
-          .catchError((Object error) => debugPrint('DGZ notifications: sync failed: $error')),
+          .catchError((_) {}),
     );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -215,7 +215,7 @@ class _RecurringScreenState extends State<RecurringScreen> {
                       unawaited(
                         NotificationService.instance
                             .syncRecurring(widget.database)
-                            .catchError((Object error) => debugPrint('DGZ notifications: sync failed: $error')),
+                            .catchError((_) {}),
                       );
                     },
                   ),
@@ -563,6 +563,8 @@ class _RecurringFormState extends State<_RecurringForm> {
   late bool enabled;
   int? accountId;
   bool saving = false;
+  List<MoneyCategory> categoryItems = const [];
+  int? selectedMainCategoryId;
 
   List<String> expenseCategories = [
     'စားသောက်စရိတ်',
@@ -576,6 +578,43 @@ class _RecurringFormState extends State<_RecurringForm> {
 
   List<String> get categories =>
       type == TransactionType.income ? incomeCategories : expenseCategories;
+
+  List<MoneyCategory> get mainCategories => categoryItems
+      .where((item) => item.type == type && item.parentId == null)
+      .toList();
+
+  List<MoneyCategory> get subcategories => categoryItems
+      .where((item) =>
+          item.type == type && item.parentId == selectedMainCategoryId)
+      .toList();
+
+  void _syncCategorySelection() {
+    MoneyCategory? selected;
+    for (final item in categoryItems) {
+      if (item.type == type && item.name == category) {
+        selected = item;
+        break;
+      }
+    }
+    if (selected != null) {
+      selectedMainCategoryId = selected.parentId ?? selected.id;
+      if (selected.parentId == null && subcategories.isNotEmpty) {
+        category = subcategories.first.name;
+      }
+      return;
+    }
+    final mains = mainCategories;
+    if (mains.isEmpty) return;
+    selectedMainCategoryId = mains.first.id;
+    category =
+        subcategories.isEmpty ? mains.first.name : subcategories.first.name;
+  }
+
+  void _selectMainCategory(int id) {
+    selectedMainCategoryId = id;
+    final main = mainCategories.firstWhere((item) => item.id == id);
+    category = subcategories.isEmpty ? main.name : subcategories.first.name;
+  }
 
   @override
   void initState() {
@@ -610,9 +649,16 @@ class _RecurringFormState extends State<_RecurringForm> {
     ]);
     if (!mounted) return;
     setState(() {
+      categoryItems = [
+        ...result[0],
+        ...result[1],
+      ];
       expenseCategories = result[0].map((item) => item.name).toList();
       incomeCategories = result[1].map((item) => item.name).toList();
-      if (!categories.contains(category) && categories.isNotEmpty) category = categories.first;
+      if (!categories.contains(category) && categories.isNotEmpty) {
+        category = categories.first;
+      }
+      _syncCategorySelection();
     });
   }
 
@@ -691,7 +737,8 @@ class _RecurringFormState extends State<_RecurringForm> {
                     kind = value.first;
                     if (kind == 'receivable') type = TransactionType.income;
                     if (kind == 'payable') type = TransactionType.expense;
-                    category = categories.first;
+                    if (categories.isNotEmpty) category = categories.first;
+                    _syncCategorySelection();
                     if (kind == 'scheduled' && nextRun == null) {
                       nextRun = DateTime.now().add(const Duration(days: 1));
                     } else if (kind != 'scheduled') {
@@ -716,7 +763,8 @@ class _RecurringFormState extends State<_RecurringForm> {
                   selected: {type},
                   onSelectionChanged: (value) => setState(() {
                     type = value.first;
-                    category = categories.first;
+                    if (categories.isNotEmpty) category = categories.first;
+                    _syncCategorySelection();
                   }),
                 ),
                 if (kind == 'scheduled') const SizedBox(height: 14),
@@ -749,24 +797,49 @@ class _RecurringFormState extends State<_RecurringForm> {
                   },
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: categories.contains(category)
-                      ? category
-                      : categories.last,
+                DropdownButtonFormField<int>(
+                  value: mainCategories.any(
+                          (item) => item.id == selectedMainCategoryId)
+                      ? selectedMainCategoryId
+                      : null,
                   decoration: InputDecoration(
-                    labelText: context.tr('အမျိုးအစား'),
+                    labelText: context.tr('အဓိကအမျိုးအစား'),
                     prefixIcon: Icon(Icons.category_outlined),
                   ),
-                  items: categories
+                  items: mainCategories
                       .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: LText(value),
+                        (item) => DropdownMenuItem(
+                          value: item.id,
+                          child: LText(item.name),
                         ),
                       )
                       .toList(),
-                  onChanged: (value) => setState(() => category = value!),
+                  onChanged: (value) => setState(() {
+                    if (value != null) _selectMainCategory(value);
+                  }),
                 ),
+                if (subcategories.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: subcategories.any((item) => item.name == category)
+                        ? category
+                        : null,
+                    decoration: InputDecoration(
+                      labelText: context.tr('အမျိုးအစားခွဲ'),
+                      prefixIcon: const Icon(Icons.subdirectory_arrow_right),
+                    ),
+                    items: subcategories
+                        .map(
+                          (item) => DropdownMenuItem(
+                            value: item.name,
+                            child: LText(item.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => category = value!),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   value: accountId,
